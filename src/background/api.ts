@@ -18,7 +18,7 @@ import {
   type TabInfo,
   type TabState,
 } from '@/core/types';
-import { agentState } from './native';
+import { agentState, syncBridge } from './native';
 import { current, type State, update } from './store';
 
 /** Runs `op`. Throws a LaneheadError for anything the caller can fix. */
@@ -214,6 +214,7 @@ const handlers: Handlers = {
       draft.settings = validSettings({ ...draft.settings, ...patch });
       return draft;
     });
+    syncBridge();
     return settings;
   },
 

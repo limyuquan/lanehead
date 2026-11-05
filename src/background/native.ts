@@ -2,8 +2,8 @@
  * Native bridge to the `lanehead` CLI: the host (registered by `lanehead install`) forwards CLI
  * requests to `dispatch`. See docs/CONTRACTS.md section 5.
  *
- * While agent control is on, the worker connects at start, when the setting changes, and on a
- * 30 s alarm whenever it has no port. An open port keeps the worker alive; the alarm brings a
+ * While agent control is on, the worker connects at start, when the setting is turned on, and on
+ * a 30 s alarm whenever it has no port. An open port keeps the worker alive; the alarm brings a
  * stopped worker back, so a shell-only agent never needs the user to wake the browser.
  */
 import { type Browser, browser } from 'wxt/browser';
@@ -21,14 +21,12 @@ export function agentState(): AgentState {
 }
 
 export function installBridge(): void {
-  browser.alarms.onAlarm.addListener(({ name }) => name === ALARM && connect());
-  browser.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.settings) connect();
-  });
-  connect();
+  browser.alarms.onAlarm.addListener(({ name }) => name === ALARM && syncBridge());
+  syncBridge();
 }
 
-function connect(): void {
+/** Connects or disconnects to match the agentControl setting. */
+export function syncBridge(): void {
   sync().catch((err) => console.error('[lanehead] bridge', err));
 }
 
@@ -71,7 +69,7 @@ async function sync(): Promise<void> {
     // "Specified native messaging host not found." / "Access to … is forbidden.": run `install`.
     state = /not found|forbidden/i.test(error) ? 'no-host' : 'connecting';
     // A host that ran fine and died (killed, crashed) is retried now, not at the next alarm.
-    if (wasConnected) setTimeout(connect, 1000);
+    if (wasConnected) setTimeout(syncBridge, 1000);
   });
   p.postMessage({ v: 1, hello });
 }
