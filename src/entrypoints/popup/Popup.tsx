@@ -13,6 +13,7 @@ import {
 import { CUSTOM_COLOR } from '@/core/badge';
 import { parseHeaderLines } from '@/core/headers';
 import type { Header, Preset, Settings, TabInfo } from '@/core/types';
+import { Checkbox } from '@/shared/Checkbox';
 import { call } from '@/shared/messages';
 import { hostOf, laneStyle, nextColor, openManage } from '@/shared/ui';
 
@@ -311,13 +312,10 @@ export function Popup({ initial, standalone }: Props) {
           {allTabs && (
             <div>
               <label className="flex items-center gap-2" style={laneStyle(allTabs.color)}>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={global === allTabs.id}
-                  onChange={(e) =>
-                    act('lane', () =>
-                      call('global', { preset: e.currentTarget.checked ? allTabs.id : null }),
-                    )
+                  onChange={(on) =>
+                    act('lane', () => call('global', { preset: on ? allTabs.id : null }))
                   }
                 />
                 <span>

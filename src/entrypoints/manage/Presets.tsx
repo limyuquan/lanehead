@@ -281,13 +281,7 @@ function Editor({ preset, color: initialColor, isGlobal, onDone }: EditorProps) 
         <div role="radiogroup" aria-labelledby={`${id}-color`} className="flex gap-3 pt-2">
           {PALETTE.map((c, i) => (
             <label key={c} className="swatch" style={laneStyle(c)}>
-              <input
-                type="radio"
-                name="color"
-                className="sr-only"
-                checked={color === c}
-                onChange={() => setColor(c)}
-              />
+              <input type="radio" name="color" checked={color === c} onChange={() => setColor(c)} />
               <span className="sr-only">{COLOR_NAMES[i]}</span>
             </label>
           ))}

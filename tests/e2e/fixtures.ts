@@ -36,6 +36,8 @@ export interface Lanehead {
   ): string;
   /** An echo URL (for fetch) on `origin`. */
   echo(id: string, origin?: string): string;
+  /** The popup as a page, showing tab `tab` (`popup.html?tab=<id>`). */
+  popup(tab: number): Promise<Page>;
   /** Opens `url` in a new tab and waits for load. */
   open(url: string): Promise<Page>;
   /** Chrome tab id of a page (matched by its unique URL). */
@@ -55,8 +57,7 @@ interface Fixtures {
 }
 
 export const test = base.extend<Fixtures>({
-  // biome-ignore lint/correctness/noEmptyPattern: Playwright needs a destructuring pattern.
-  context: async ({}, use) => {
+  context: async ({ deviceScaleFactor }, use) => {
     if (!existsSync(path.join(EXTENSION_PATH, 'manifest.json'))) {
       throw new Error(`No e2e build at ${EXTENSION_PATH}. Run \`pnpm build:e2e\` first.`);
     }
@@ -65,6 +66,7 @@ export const test = base.extend<Fixtures>({
       // New headless mode: the full browser, with extensions. Never a visible window.
       headless: true,
       args: [`--disable-extensions-except=${EXTENSION_PATH}`, `--load-extension=${EXTENSION_PATH}`],
+      ...(deviceScaleFactor && { deviceScaleFactor }),
     });
     await use(context);
     await context.close();
@@ -100,6 +102,12 @@ export const test = base.extend<Fixtures>({
       },
       echo(id, origin = ORIGIN_A) {
         return `${origin}/echo?id=${encodeURIComponent(unique(id))}`;
+      },
+      async popup(tab) {
+        const page = await context.newPage();
+        await page.goto(`chrome-extension://${EXTENSION_ID}/popup.html?tab=${tab}`);
+        await page.getByTestId('lane').waitFor();
+        return page;
       },
       async open(url) {
         const page = await context.newPage();

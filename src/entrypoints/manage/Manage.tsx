@@ -2,9 +2,10 @@
  * The manage page: Presets, Tabs, Agents, Settings, one section at a time (`#presets`, …).
  * Live: it re-reads everything when storage or tabs change, so agent changes show up at once.
  */
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { type Browser, browser } from 'wxt/browser';
 import type { Preset, Settings, Status, TabInfo } from '@/core/types';
+import { Checkbox } from '@/shared/Checkbox';
 import { call } from '@/shared/messages';
 import { Agents } from './Agents';
 import { Presets } from './Presets';
@@ -54,12 +55,18 @@ export function Manage() {
   const [error, setError] = useState('');
   const [section, setSection] = useState(fromHash);
 
+  // Only the latest of overlapping reads is shown.
+  const latest = useRef(0);
   const refresh = useCallback(() => {
-    load().then(setData, (err: Error) => setError(err.message));
+    const n = ++latest.current;
+    return load().then(
+      (d) => n === latest.current && setData(d),
+      (err: Error) => setError(err.message),
+    );
   }, []);
 
   useEffect(() => {
-    refresh();
+    void refresh();
     const onTab = (_: number, info: Browser.tabs.OnUpdatedInfo) =>
       (info.url || info.title) && refresh();
     const onHash = () => setSection(fromHash());
@@ -112,7 +119,7 @@ export function Manage() {
           {section === 'presets' && <Presets data={data} />}
           {section === 'tabs' && <Tabs data={data} />}
           {section === 'agents' && <Agents data={data} />}
-          {section === 'settings' && <SettingsSection settings={data.settings} />}
+          {section === 'settings' && <SettingsSection settings={data.settings} refresh={refresh} />}
         </main>
       )}
     </div>
@@ -163,7 +170,13 @@ const SWITCHES: [keyof Settings, string, string][] = [
   ],
 ];
 
-function SettingsSection({ settings }: { settings: Settings }) {
+function SettingsSection({
+  settings,
+  refresh,
+}: {
+  settings: Settings;
+  refresh: () => Promise<unknown>;
+}) {
   const [error, setError] = useState('');
   return (
     <section aria-labelledby="settings-heading">
@@ -172,14 +185,13 @@ function SettingsSection({ settings }: { settings: Settings }) {
         {SWITCHES.map(([key, label, about]) => (
           <li key={key} className="border-b border-line py-4">
             <label className="flex items-start gap-3">
-              <input
-                type="checkbox"
+              <Checkbox
                 className="mt-1.5"
                 checked={settings[key] as boolean}
-                onChange={(e) =>
-                  call('settings', { patch: { [key]: e.currentTarget.checked } }).catch(
-                    (err: Error) => setError(err.message),
-                  )
+                onChange={(on) =>
+                  call('settings', { patch: { [key]: on } })
+                    .then(refresh)
+                    .catch((err: Error) => setError(err.message))
                 }
               />
               <span>

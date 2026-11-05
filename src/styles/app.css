@@ -167,13 +167,21 @@ input[type="checkbox"] {
   text-align: center;
 }
 
-/* Color picker: radio inputs hidden inside round swatches. */
+/* Color picker: each radio is an invisible input covering its round swatch. */
 .swatch {
+  position: relative;
   display: inline-block;
   width: 20px;
   height: 20px;
   border-radius: 50%;
   background: var(--lane);
+  cursor: pointer;
+}
+.swatch input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
   cursor: pointer;
 }
 .swatch:has(:checked) {
