@@ -5,6 +5,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "lanehead": "dist/lanehead.js"
+  },
   "packageManager": "pnpm@10.0.0",
   "engines": {
     "node": ">=22"
@@ -14,11 +17,12 @@
     "build": "wxt build",
     "build:e2e": "wxt build --mode e2e",
     "zip": "wxt zip",
-    "typecheck": "wxt prepare && tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "build:cli": "esbuild cli/main.ts --bundle --platform=node --format=esm --target=node22 --loader:.md=text --banner:js='#!/usr/bin/env node' --outfile=dist/lanehead.js && chmod +x dist/lanehead.js",
+    "typecheck": "wxt prepare && tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.cli.json",
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "vitest run",
-    "test:e2e": "pnpm build:e2e && playwright test",
+    "test:e2e": "pnpm build:e2e && pnpm build:cli && playwright test",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
     "postinstall": "wxt prepare"
   },
@@ -34,6 +38,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@wxt-dev/module-react": "1.2.2",
+    "esbuild": "0.28.2",
     "tailwindcss": "4.3.3",
     "typescript": "7.0.2",
     "vite": "8.3.5",

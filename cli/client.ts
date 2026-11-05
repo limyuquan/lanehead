@@ -1,0 +1,92 @@
+/** Talking to connected browsers through their hosts' sockets. */
+import { existsSync, readdirSync, rmSync } from 'node:fs';
+import net from 'node:net';
+import path from 'node:path';
+import readline from 'node:readline';
+import type { Status } from '../src/core/types';
+import { CliError } from './args';
+import { hostScript, runDir } from './home';
+
+export type Instance = Pick<Status, 'instance' | 'label' | 'browser' | 'version'>;
+
+/** "<who> connected; <what to do>." */
+export function hint(who = 'No browser is'): string {
+  return existsSync(hostScript())
+    ? `${who} connected; ask the user to open Chrome with the Lanehead extension and its agent control on.`
+    : `${who} connected; run \`lanehead install\`, then ask the user to enable the Lanehead extension in Chrome.`;
+}
+
+const socketOf = (instance: string) => path.join(runDir(), `${instance}.sock`);
+
+/** Ids of connected browsers. Sockets nobody listens on are left over from killed hosts: deleted. */
+export async function live(): Promise<string[]> {
+  const ids = readdirSync(runDir())
+    .filter((f) => f.endsWith('.sock'))
+    .map((f) => f.slice(0, -5));
+  const alive = await Promise.all(
+    ids.map(
+      (id) =>
+        new Promise<boolean>((resolve) => {
+          const socket = net.connect(socketOf(id), () => {
+            socket.end();
+            resolve(true);
+          });
+          socket.on('error', (err: NodeJS.ErrnoException) => {
+            if (err.code === 'ECONNREFUSED') rmSync(socketOf(id), { force: true });
+            resolve(false);
+          });
+        }),
+    ),
+  );
+  return ids.filter((_, i) => alive[i]);
+}
+
+/** Runs `op` in the browser `instance`. Rejects with a CliError. */
+export function request(instance: string, op: string, args: object, timeout = 10_000) {
+  return new Promise<unknown>((resolve, reject) => {
+    const socket = net.connect(socketOf(instance));
+    const fail = (err: CliError) => {
+      socket.destroy();
+      reject(err);
+    };
+    const timer = setTimeout(() => {
+      const message = `The browser did not answer within ${timeout / 1000} s; retry once, then ask the user to check the browser.`;
+      fail(new CliError('INTERNAL', message, 1));
+    }, timeout);
+    socket.on('error', () => {
+      clearTimeout(timer);
+      fail(new CliError('NOT_CONNECTED', hint(`Browser ${instance} is not`), 3));
+    });
+    socket.write(`${JSON.stringify({ v: 1, id: 1, op, args })}\n`);
+    readline.createInterface({ input: socket }).once('line', (line) => {
+      clearTimeout(timer);
+      socket.end();
+      const reply = JSON.parse(line);
+      if (reply.ok) resolve(reply.result);
+      else reject(new CliError(reply.error.code, reply.error.message, 1));
+    });
+  });
+}
+
+/** Every connected browser, described. */
+export async function instances(): Promise<Instance[]> {
+  return Promise.all(
+    (await live()).map(async (id) => {
+      const { instance, label, browser, version } = (await request(id, 'status', {})) as Status;
+      return { instance, label, browser, version };
+    }),
+  );
+}
+
+/** The browser to talk to: `-i`, else `LANEHEAD_INSTANCE`, else the only connected one. */
+export async function pick(instance = process.env.LANEHEAD_INSTANCE): Promise<string> {
+  if (instance) return instance;
+  const ids = await live();
+  if (ids.length === 1) return ids[0] as string;
+  if (!ids.length) throw new CliError('NOT_CONNECTED', hint(), 3);
+  const list = await instances();
+  const message = `Several browsers are connected; pass -i <instance>: ${list.map((i) => `${i.instance} (${i.label})`).join(', ')}.`;
+  throw new CliError('AMBIGUOUS_INSTANCE', message, 2, {
+    instances: list.map(({ instance, label }) => ({ instance, label })),
+  });
+}

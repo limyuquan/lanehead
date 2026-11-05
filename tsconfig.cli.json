@@ -1,0 +1,8 @@
+{
+  // The `lanehead` CLI and native host (Node), with the core modules it bundles.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["cli"]
+}
