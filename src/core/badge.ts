@@ -19,17 +19,17 @@ export const CUSTOM_COLOR = '#5f6368';
 /**
  * Short badge text for a name or value:
  * 1. drop everything up to the first `_` or `-` if ≥ 3 letters/digits remain
- * 2. take the first 4 letters/digits, lowercased
+ * 2. keep letters/digits, lowercased
+ * 3. longer than 4: first 3 + last 1, so names that differ at the end (`lane_a`, `lane_b`) differ
  *
- * `lane_a` → `claw`, `lane_a` → `lane`.
+ * `lane_a` → `clad`, `lane_a` → `lana`, `lane_b` → `lanb`, `dev` → `dev`.
  */
 export function deriveBadge(text: string): string {
-  const alnum = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, '');
+  const alnum = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
   const cut = text.search(/[_-]/);
-  const rest = cut >= 0 ? text.slice(cut + 1) : '';
-  return alnum(alnum(rest).length >= 3 ? rest : text)
-    .slice(0, 4)
-    .toLowerCase();
+  const rest = alnum(cut >= 0 ? text.slice(cut + 1) : '');
+  const s = rest.length >= 3 ? rest : alnum(text);
+  return s.length > 4 ? s.slice(0, 3) + s.slice(-1) : s;
 }
 
 /**
