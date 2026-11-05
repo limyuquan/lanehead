@@ -67,6 +67,45 @@ test('popup', async ({ context, lh }) => {
   await popupShots(popup, 'popup');
 });
 
+// Not for the README: a check that long names stay inside the popup and the presets table.
+test('long names', async ({ context, lh }) => {
+  await fakeSites(context);
+  await seedPresets(lh);
+  const save = (name: string, color: number, value: string) =>
+    lh.api('preset.save', {
+      preset: {
+        name,
+        color: PALETTE[color] as string,
+        headers: [{ name: 'x-env', value }],
+        domains: [],
+      },
+    });
+  for (const n of [10, 11, 12]) await save(`lane_backend_feature_${n}`, n % 8, `v${n}`.repeat(30));
+  const wide = await save('W'.repeat(40), 6, 'wide');
+  const cart = await lh.open(site('shop.example.com', 'cart', 'Cart — Example Shop'));
+  const tab = await lh.tabId(cart);
+  await lh.api('set', {
+    tab,
+    preset: wide.id,
+    headers: [{ name: 'x-trace', value: 't'.repeat(120) }],
+  });
+  const popup = await lh.popup(tab);
+  for (const scheme of ['light', 'dark'] as const) {
+    await popup.emulateMedia({ colorScheme: scheme });
+    await popup
+      .locator('main')
+      .screenshot({ path: test.info().outputPath(`popup-long-${scheme}.png`) });
+  }
+  const manage = await context.newPage();
+  await manage.setViewportSize({ width: 1080, height: 720 });
+  await manage.goto(`chrome-extension://${EXTENSION_ID}/manage.html#presets`);
+  await manage.getByRole('heading', { level: 2 }).first().waitFor();
+  await manage.screenshot({ path: test.info().outputPath('manage-long.png'), fullPage: true });
+  // Viewport, not fullPage: headless full-page captures of a narrow page come out tiled.
+  await manage.setViewportSize({ width: 380, height: 1500 });
+  await manage.screenshot({ path: test.info().outputPath('manage-long-380.png') });
+});
+
 test('popup first run', async ({ context, lh }) => {
   await fakeSites(context);
   const page = await lh.open(site('shop.example.com', 'cart', 'Cart — Example Shop'));
@@ -86,9 +125,10 @@ test('manage', async ({ context, lh }) => {
       { headers: [{ name: 'x-env', value: 'feature_profile' }] },
     ],
   ];
-  for (const [url, state] of tabs) {
+  // Reloaded after the change, except the first: one Reload button shows how a stale tab looks.
+  for (const [i, [url, state]] of tabs.entries()) {
     const page = await lh.open(url);
-    if (state) await lh.api('set', { tab: await lh.tabId(page), ...state });
+    if (state) await lh.api('set', { tab: await lh.tabId(page), ...state, reload: i > 0 });
   }
   // The browser's first blank tab is not part of the picture.
   for (const page of context.pages()) if (page.url() === 'about:blank') await page.close();
