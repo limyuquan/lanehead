@@ -62,10 +62,11 @@ export function host(): void {
   }
 
   function serve(socket: net.Socket) {
-    socket.on('error', () => {}); // the CLI gave up (timeout, Ctrl-C)
     const answer = (id: unknown, reply: object) =>
       socket.write(`${JSON.stringify({ v: 1, ...reply, id })}\n`);
-    readline.createInterface({ input: socket }).on('line', (line) => {
+    const lines = readline.createInterface({ input: socket });
+    lines.on('error', () => {}); // the socket's, re-emitted: the CLI gave up (timeout, Ctrl-C)
+    lines.on('line', (line) => {
       let req: { id?: unknown; op?: unknown; args?: unknown };
       try {
         if (line.length > MAX_LINE) throw new Error();

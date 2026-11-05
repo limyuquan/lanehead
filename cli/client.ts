@@ -1,5 +1,5 @@
 /** Talking to connected browsers through their hosts' sockets. */
-import { existsSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -27,12 +27,16 @@ export async function live(): Promise<string[]> {
     ids.map(
       (id) =>
         new Promise<boolean>((resolve) => {
-          const socket = net.connect(socketOf(id), () => {
+          const file = socketOf(id);
+          const inode = statSync(file, { throwIfNoEntry: false })?.ino;
+          const socket = net.connect(file, () => {
             socket.end();
             resolve(true);
           });
           socket.on('error', (err: NodeJS.ErrnoException) => {
-            if (err.code === 'ECONNREFUSED') rmSync(socketOf(id), { force: true });
+            // Unless a new host has just replaced it.
+            const same = statSync(file, { throwIfNoEntry: false })?.ino === inode;
+            if (err.code === 'ECONNREFUSED' && same) rmSync(file, { force: true });
             resolve(false);
           });
         }),
@@ -53,12 +57,14 @@ export function request(instance: string, op: string, args: object, timeout = 10
       const message = `The browser did not answer within ${timeout / 1000} s; retry once, then ask the user to check the browser.`;
       fail(new CliError('INTERNAL', message, 1));
     }, timeout);
-    socket.on('error', () => {
+    // readline re-emits the socket's errors.
+    const lines = readline.createInterface({ input: socket });
+    lines.on('error', () => {
       clearTimeout(timer);
       fail(new CliError('NOT_CONNECTED', hint(`Browser ${instance} is not`), 3));
     });
     socket.write(`${JSON.stringify({ v: 1, id: 1, op, args })}\n`);
-    readline.createInterface({ input: socket }).once('line', (line) => {
+    lines.once('line', (line) => {
       clearTimeout(timer);
       socket.end();
       const reply = JSON.parse(line);
