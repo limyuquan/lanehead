@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PALETTE } from '@/core/badge';
 import {
   mergeHeaders,
+  parseHeaderLines,
   validateDomains,
   validateHeader,
   validateHeaders,
@@ -50,6 +51,23 @@ describe('validateHeaders', () => {
       { name: 'x-a', value: '2' },
     ];
     expect(code(() => validateHeaders(headers))).toBe('BAD_HEADER');
+  });
+});
+
+describe('parseHeaderLines', () => {
+  it('reads pasted lines: first colon splits, blank lines and curl -H wrappers are fine', () => {
+    const text = "X-Env: lane_a\n\n  -H 'x-trace: a:b'\r\nx-canary:1\n";
+    expect(parseHeaderLines(text)).toEqual([
+      { name: 'x-env', value: 'lane_a' },
+      { name: 'x-trace', value: 'a:b' },
+      { name: 'x-canary', value: '1' },
+    ]);
+  });
+
+  it('rejects a line without a name and colon, and bad headers', () => {
+    expect(code(() => parseHeaderLines('x-env lane_a'))).toBe('BAD_HEADER');
+    expect(code(() => parseHeaderLines(': value'))).toBe('BAD_HEADER');
+    expect(code(() => parseHeaderLines('bad name: 1'))).toBe('BAD_HEADER');
   });
 });
 

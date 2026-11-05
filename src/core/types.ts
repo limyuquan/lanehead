@@ -52,9 +52,20 @@ export type TabInfo = {
   global: boolean;
   /** Effective headers. */
   headers: Record<string, string>;
+  /** Names of the tab's own headers (the ones `clear` can remove by name). */
+  own: string[];
 };
 
-export type Status = { instance: string; label: string; version: string; browser: string };
+/** State of the native bridge. */
+export type AgentState = 'connected' | 'connecting' | 'no-host' | 'off';
+
+export type Status = {
+  instance: string;
+  label: string;
+  version: string;
+  browser: string;
+  agent: AgentState;
+};
 
 /** Every API operation: `[args, result]`. */
 export type Ops = {
@@ -77,6 +88,7 @@ export type Ops = {
   presets: [Record<string, never>, { presets: Preset[]; global: string | null }];
   'preset.save': [{ preset: Omit<Preset, 'id'> & { id?: string } }, Preset];
   'preset.delete': [{ id: string }, Record<string, never>];
+  'preset.order': [{ ids: string[] }, { presets: Preset[] }];
   global: [{ preset: string | null }, { global: string | null }];
   settings: [{ patch?: Partial<Settings> }, Settings];
   status: [Record<string, never>, Status];

@@ -49,6 +49,29 @@ export function validateHeaders(headers: Header[]): Header[] {
   return out;
 }
 
+/**
+ * Pasted `name: value` lines → validated headers. Splits each line on its first `:`; skips blank
+ * lines; accepts curl's `-H 'name: value'` form.
+ */
+export function parseHeaderLines(text: string): Header[] {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) =>
+      l
+        .trim()
+        .replace(/^-H\s+/, '')
+        .replace(/^(['"])(.*)\1$/, '$2'),
+    )
+    .filter(Boolean);
+  return validateHeaders(
+    lines.map((line) => {
+      const colon = line.indexOf(':');
+      if (colon < 1) throw new LaneheadError('BAD_HEADER', `Write "${line}" as name: value.`);
+      return { name: line.slice(0, colon), value: line.slice(colon + 1) };
+    }),
+  );
+}
+
 /** `base` with `over` on top: same name → `over`'s value in `base`'s position; new names appended. */
 export function mergeHeaders(base: Header[], over: Header[]): Header[] {
   const byName = new Map(over.map((h) => [h.name, h]));

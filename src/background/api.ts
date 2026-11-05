@@ -182,6 +182,22 @@ const handlers: Handlers = {
     return {};
   },
 
+  async 'preset.order'({ ids }) {
+    return update((draft) => {
+      const byId = new Map(draft.presets.map((p) => [p.id, p]));
+      const ordered = Array.isArray(ids) ? ids.map((id) => byId.get(id)) : [];
+      if (
+        ordered.length !== byId.size ||
+        new Set(ordered).size !== byId.size ||
+        !ordered.every(Boolean)
+      ) {
+        throw new LaneheadError('BAD_REQUEST', 'Pass every preset id exactly once.');
+      }
+      draft.presets = ordered as Preset[];
+      return { presets: draft.presets };
+    });
+  },
+
   async global({ preset }) {
     const { global } = await update((draft) => {
       draft.global = preset === null ? null : findPreset(draft.presets, preset).id;
@@ -207,6 +223,8 @@ const handlers: Handlers = {
       label: settings.label,
       version: browser.runtime.getManifest().version,
       browser: `${brand === 'Edg' ? 'Edge' : 'Chrome'} ${major}`,
+      // Phase 3 (src/background/native.ts) reports the bridge state.
+      agent: 'off',
     };
   },
 };
@@ -255,6 +273,7 @@ function info(tab: Browser.tabs.Tab, state: State): TabInfo {
     lane: lane.lane,
     global: lane.global,
     headers: Object.fromEntries(lane.headers.map((h) => [h.name, h.value])),
+    own: state.tabs[id]?.headers.map((h) => h.name) ?? [],
   };
 }
 
