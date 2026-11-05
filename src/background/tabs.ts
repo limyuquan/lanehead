@@ -30,20 +30,20 @@ export function installTabListeners(): void {
       .then(({ settings, tabs }) => {
         // Most sources have no state: skip the rules rewrite.
         if (!settings.inheritOnOpen || !tabs[sourceTabId]) return;
+        // Re-check inside the writer: the new tab may have been set (or the source cleared) meanwhile.
         return update((draft) => {
           const source = draft.tabs[sourceTabId];
-          if (source) draft.tabs[tabId] = structuredClone(source);
+          if (draft.settings.inheritOnOpen && source && !draft.tabs[tabId]) {
+            draft.tabs[tabId] = structuredClone(source);
+          }
         });
       })
       .catch(logError);
   });
 
+  // Always queued, even for tabs with no state: a `set` on this tab may still be in the queue.
   browser.tabs.onRemoved.addListener((tabId) => {
-    current()
-      .then((state) => {
-        if (state.tabs[tabId]) return update((draft) => void delete draft.tabs[tabId]);
-      })
-      .catch(logError);
+    update((draft) => void delete draft.tabs[tabId]).catch(logError);
   });
 
   browser.tabs.onReplaced.addListener((addedId, removedId) => {

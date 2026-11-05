@@ -120,8 +120,8 @@ const handlers: Handlers = {
       throw new LaneheadError('BAD_URL', 'Open an http or https URL.');
     }
     const own = validateHeaders(headers ?? []);
-    const presetId =
-      preset === undefined ? undefined : findPreset((await current()).presets, preset).id;
+    // Fail fast before creating a tab; re-resolved in the writer in case it was deleted meanwhile.
+    if (preset !== undefined) findPreset((await current()).presets, preset);
     const win = await browser.windows
       .getLastFocused({ windowTypes: ['normal'] })
       .catch(() => undefined);
@@ -134,6 +134,7 @@ const handlers: Handlers = {
     let state: State;
     try {
       state = await update((draft) => {
+        const presetId = preset === undefined ? undefined : findPreset(draft.presets, preset).id;
         put(draft, id, { ...(presetId && { preset: presetId }), headers: own });
         return draft;
       });
