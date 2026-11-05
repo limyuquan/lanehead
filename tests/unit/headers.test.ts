@@ -129,6 +129,7 @@ describe('validatePreset', () => {
     ['a taken name (any case)', { name: 'staging' }],
     ['an empty name', { name: ' ' }],
     ['a 41-char name', { name: 'n'.repeat(41) }],
+    ['a reserved lane name', { name: 'Off' }],
     ['a color outside the palette', { color: '#123456' }],
     ['a 5-char badge', { badge: 'abcde' }],
   ])('rejects %s', (_, patch) => {

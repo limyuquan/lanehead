@@ -94,7 +94,8 @@ export function validateDomains(domains: string[]): string[] {
 
 /**
  * A preset as saved:
- * - name: trimmed, 1–40 chars, unique among `others` (case-insensitive)
+ * - name: trimmed, 1–40 chars, unique among `others` (case-insensitive), not "custom" or "off"
+ *   (those are lanes of their own in TabInfo)
  * - color: one of PALETTE
  * - badge: trimmed, ≤ 4 chars; empty → derived (omitted)
  * - headers: ≥ 1, see validateHeaders
@@ -107,6 +108,9 @@ export function validatePreset(preset: Omit<Preset, 'id'>, others: Preset[]): Om
   const name = String(preset.name ?? '').trim();
   if (!name || name.length > 40) {
     throw new LaneheadError('BAD_REQUEST', 'Give the preset a name of 1–40 characters.');
+  }
+  if (['custom', 'off'].includes(name.toLowerCase())) {
+    throw new LaneheadError('BAD_REQUEST', `Pick another name: "${name}" is reserved.`);
   }
   if (others.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
     throw new LaneheadError('BAD_REQUEST', `Pick another name: "${name}" is taken.`);
