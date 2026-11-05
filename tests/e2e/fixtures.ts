@@ -21,7 +21,8 @@ import { EXTENSION_ID } from '@/shared/ids';
 import type { Request, Response } from '@/shared/messages';
 import { ORIGIN_A } from '../../playwright.config';
 
-export const EXTENSION_PATH = path.resolve('.output/chrome-mv3-e2e');
+/** The e2e build; `EXTENSION_PATH` points at a copy (parallel runs while the tree rebuilds). */
+export const EXTENSION_PATH = path.resolve(process.env.EXTENSION_PATH ?? '.output/chrome-mv3-e2e');
 
 /** `chrome` inside `evaluate` callbacks. */
 export type ChromeGlobal = { chrome: typeof Browser };

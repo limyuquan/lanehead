@@ -18,7 +18,8 @@ import { type BrowserContext, chromium } from '@playwright/test';
 import { PALETTE } from '@/core/badge';
 import { test as base, EXTENSION_PATH, expect } from './fixtures';
 
-const CLI = path.resolve('dist/lanehead.js');
+/** `LANEHEAD_CLI` points at a copy (parallel runs while the tree rebuilds). */
+const CLI = path.resolve(process.env.LANEHEAD_CLI ?? 'dist/lanehead.js');
 
 // biome-ignore lint/suspicious/noExplicitAny: the CLI's JSON, checked with expect.
 type Run = { code: number; out: any };

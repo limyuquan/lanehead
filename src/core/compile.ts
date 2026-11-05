@@ -52,14 +52,25 @@ export function laneOf(
 }
 
 /**
+ * What a tab sends, comparable: its header lines and the domains they go to. Equal fingerprints
+ * mean the same requests carry the same headers.
+ */
+export function fingerprint({ headers, preset }: Lane): string {
+  const lines = headers.map((h) => `${h.name}: ${h.value}`).sort();
+  return JSON.stringify([lines, [...(preset?.domains ?? [])].sort()]);
+}
+
+/**
  * The complete session ruleset:
  *
  * | rule              | priority | condition                                  | headers                   |
  * |-------------------|----------|--------------------------------------------|---------------------------|
  * | global            | 1        | excludedTabIds: every tab with a state     | global preset             |
  * | tab, preset part  | 2        | tabIds: [tabId], preset's requestDomains   | preset's, minus own names |
- * | tab, own part     | 3        | tabIds: [tabId]                            | own                       |
+ * | tab, own part     | 3        | tabIds: [tabId], preset's requestDomains   | own                       |
  *
+ * One scope per tab: own headers go where the tab's preset goes (everywhere without a preset or
+ * without preset domains).
  * Ids are 1, 2, 3… in that order (tab ids are too large to derive rule ids from, and the
  * ruleset is always replaced whole). Off tabs and empty parts get no rule. Each header name is
  * set by one rule per tab, so priorities never decide a conflict.
@@ -106,7 +117,7 @@ export function compile(
     const preset = presets.find((p) => p.id === state.preset);
     const presetPart = preset?.headers.filter((h) => !own.has(h.name)) ?? [];
     if (preset && presetPart.length) add(2, presetPart, { tabIds: [tabId] }, preset.domains);
-    if (state.headers.length) add(3, state.headers, { tabIds: [tabId] });
+    if (state.headers.length) add(3, state.headers, { tabIds: [tabId] }, preset?.domains);
   }
   return rules;
 }

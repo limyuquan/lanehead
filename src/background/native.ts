@@ -14,10 +14,19 @@ import { current } from './store';
 
 const ALARM = 'bridge';
 let port: Browser.runtime.Port | undefined;
-let state: AgentState = 'off';
+let state: AgentState | undefined;
 
 export function agentState(): AgentState {
-  return state;
+  return state ?? 'off';
+}
+
+/** Pages follow the state through `storage.session` key `agent`. */
+function setState(next: AgentState) {
+  if (next === state) return;
+  state = next;
+  browser.storage.session
+    .set({ agent: next })
+    .catch((err) => console.error('[lanehead] bridge', err));
 }
 
 export function installBridge(): void {
@@ -35,7 +44,7 @@ async function sync(): Promise<void> {
   if (!settings.agentControl) {
     port?.disconnect();
     port = undefined;
-    state = 'off';
+    setState('off');
     await browser.alarms.clear(ALARM);
     return;
   }
@@ -44,7 +53,7 @@ async function sync(): Promise<void> {
   }
   const hello = await dispatch('status', {});
   if (port) return;
-  if (state === 'off') state = 'connecting';
+  if (agentState() === 'off') setState('connecting');
 
   const p = browser.runtime.connectNative(HOST_NAME);
   port = p;
@@ -52,7 +61,7 @@ async function sync(): Promise<void> {
   p.onMessage.addListener((msg: { ready?: true; id: number; op: string; args: unknown }) => {
     // The host sends `ready` once its socket listens.
     if (msg.ready) {
-      state = 'connected';
+      setState('connected');
       return;
     }
     dispatch(msg.op, msg.args).then(
@@ -67,7 +76,7 @@ async function sync(): Promise<void> {
     const wasConnected = state === 'connected';
     port = undefined;
     // "Specified native messaging host not found." / "Access to … is forbidden.": run `install`.
-    state = /not found|forbidden/i.test(error) ? 'no-host' : 'connecting';
+    setState(/not found|forbidden/i.test(error) ? 'no-host' : 'connecting');
     // A host that ran fine and died (killed, crashed) is retried now, not at the next alarm.
     if (wasConnected) setTimeout(syncBridge, 1000);
   });

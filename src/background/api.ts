@@ -3,11 +3,13 @@
  * host (phase 3) through the native port: same validation, same results. See docs/CONTRACTS.md
  * section 3.
  *
- * A mutation resolves only after the session rules are installed (and the tab reloaded, if asked).
+ * A mutation resolves only after the session rules are installed (and tabs reloaded, if asked or
+ * if reloadOnChange is on).
  */
 import { type Browser, browser } from 'wxt/browser';
-import { laneOf } from '@/core/compile';
-import { mergeHeaders, validateHeaders, validatePreset } from '@/core/headers';
+import { fingerprint, laneOf } from '@/core/compile';
+import { validateHeaders, validatePreset } from '@/core/headers';
+import { applySet } from '@/core/tabs';
 import {
   type ErrorCode,
   LaneheadError,
@@ -19,7 +21,7 @@ import {
   type TabState,
 } from '@/core/types';
 import { agentState, syncBridge } from './native';
-import { current, type State, update } from './store';
+import { brand, current, markLoaded, type State, sends, update } from './store';
 
 /** Runs `op`. Throws a LaneheadError for anything the caller can fix. */
 export async function dispatch(op: string, args: unknown): Promise<unknown> {
@@ -63,24 +65,18 @@ const handlers: Handlers = {
   async set({ tab, headers, preset, replace, off, reload }) {
     const t = await getTab(tab);
     const own = headers === undefined ? undefined : validateHeaders(headers);
-    const state = await update((draft) => {
-      const cur = draft.tabs[t.id] ?? { headers: [] };
+    const state = await mutate((draft) => {
       if (off) {
         if (own?.length || preset) {
           throw new LaneheadError('BAD_REQUEST', 'Turn a tab off without headers or a preset.');
         }
         draft.tabs[t.id] = { headers: [], off: true };
-        return draft;
+        return;
       }
-      const presetId =
-        preset === undefined ? cur.preset : preset && findPreset(draft.presets, preset).id;
-      put(draft, t.id, {
-        ...(presetId && { preset: presetId }),
-        headers: replace ? (own ?? []) : mergeHeaders(cur.headers, own ?? []),
-      });
-      return draft;
-    });
-    return finish(t, state, reload);
+      const found = preset == null ? preset : findPreset(draft.presets, preset);
+      put(draft, t.id, applySet(draft.tabs[t.id], { headers: own, preset: found, replace }));
+    }, reload && t.id);
+    return info(t, state);
   },
 
   async clear({ tab, names, reload }) {
@@ -88,25 +84,19 @@ const handlers: Handlers = {
     if (names !== undefined && !Array.isArray(names)) {
       throw new LaneheadError('BAD_REQUEST', 'Pass names as a list.');
     }
-    const state = await update((draft) => {
+    const state = await mutate((draft) => {
       const cur = draft.tabs[t.id];
       if (!names) {
         delete draft.tabs[t.id];
-        return draft;
+        return;
       }
       const drop = new Set(names.map((n) => String(n).trim().toLowerCase()));
       for (const name of drop) {
-        if (!cur?.headers.some((h) => h.name === name)) {
-          throw new LaneheadError(
-            'NOT_OWN',
-            `"${name}" is not one of this tab's own headers; to stop a preset header, clear the preset.`,
-          );
-        }
+        if (!cur?.headers.some((h) => h.name === name)) throw notOwn(draft, t.id, name);
       }
       if (cur) put(draft, t.id, { ...cur, headers: cur.headers.filter((h) => !drop.has(h.name)) });
-      return draft;
-    });
-    return finish(t, state, reload);
+    }, reload && t.id);
+    return info(t, state);
   },
 
   // about:blank first, rules second, navigation last: the first request already has the headers.
@@ -137,6 +127,8 @@ const handlers: Handlers = {
       state = await update((draft) => {
         const presetId = preset === undefined ? undefined : findPreset(draft.presets, preset).id;
         put(draft, id, { ...(presetId && { preset: presetId }), headers: own });
+        // Its page loads only after this, with these headers.
+        draft.loaded[id] = sends(draft, id);
         return draft;
       });
     } catch (err) {
@@ -149,7 +141,8 @@ const handlers: Handlers = {
 
   async reload({ tab }) {
     const t = await getTab(tab);
-    return finish(t, await current(), true);
+    await reloadTab(t.id);
+    return info(t, await current());
   },
 
   async presets() {
@@ -158,22 +151,23 @@ const handlers: Handlers = {
   },
 
   async 'preset.save'({ preset }) {
-    return update((draft) => {
+    let saved: Preset | undefined;
+    await mutate((draft) => {
       const id = preset?.id;
       const index = draft.presets.findIndex((p) => p.id === id);
       if (id !== undefined && index < 0) {
         throw new LaneheadError('NO_PRESET', 'Save without an id to create a new preset.');
       }
       const others = draft.presets.filter((p) => p.id !== id);
-      const saved: Preset = { id: id ?? crypto.randomUUID(), ...validatePreset(preset, others) };
+      saved = { id: id ?? crypto.randomUUID(), ...validatePreset(preset, others) };
       if (index < 0) draft.presets.push(saved);
       else draft.presets[index] = saved;
-      return saved;
     });
+    return saved as Preset;
   },
 
   async 'preset.delete'({ id }) {
-    await update((draft) => {
+    await mutate((draft) => {
       const gone = findPreset(draft.presets, id).id;
       draft.presets = draft.presets.filter((p) => p.id !== gone);
       if (draft.global === gone) draft.global = null;
@@ -201,9 +195,8 @@ const handlers: Handlers = {
   },
 
   async global({ preset }) {
-    const { global } = await update((draft) => {
+    const { global } = await mutate((draft) => {
       draft.global = preset === null ? null : findPreset(draft.presets, preset).id;
-      return draft;
     });
     return { global };
   },
@@ -220,12 +213,12 @@ const handlers: Handlers = {
 
   async status() {
     const { instanceId, settings } = await current();
-    const [, brand = 'Chrome', major = '?'] = /(Edg|Chrome)\/(\d+)/.exec(navigator.userAgent) ?? [];
+    const [, major = '?'] = /Chrome\/(\d+)/.exec(navigator.userAgent) ?? [];
     return {
       instance: instanceId,
       label: settings.label,
       version: browser.runtime.getManifest().version,
-      browser: `${brand === 'Edg' ? 'Edge' : 'Chrome'} ${major}`,
+      browser: `${brand()} ${major}`,
       agent: agentState(),
     };
   },
@@ -235,12 +228,12 @@ type Tab = Browser.tabs.Tab & { id: number };
 
 async function getTab(tab: unknown): Promise<Tab> {
   if (!Number.isInteger(tab) || (tab as number) < 0) {
-    throw new LaneheadError('BAD_REQUEST', 'Pass a tab id from `tabs`.');
+    throw new LaneheadError('BAD_REQUEST', 'Pass a tab id from `lanehead tabs`.');
   }
   try {
     return (await browser.tabs.get(tab as number)) as Tab;
   } catch {
-    throw new LaneheadError('NO_TAB', `Tab ${tab} is gone; list tabs with \`tabs\`.`);
+    throw new LaneheadError('NO_TAB', `No tab ${tab}; run \`lanehead tabs\`.`);
   }
 }
 
@@ -248,8 +241,7 @@ async function getTab(tab: unknown): Promise<Tab> {
 function findPreset(presets: Preset[], key: unknown): Preset {
   const lower = String(key).toLowerCase();
   const found = presets.find((p) => p.id === key || p.name.toLowerCase() === lower);
-  if (!found)
-    throw new LaneheadError('NO_PRESET', `No preset "${key}"; list them with \`presets\`.`);
+  if (!found) throw new LaneheadError('NO_PRESET', `No preset "${key}"; run \`lanehead presets\`.`);
   return found;
 }
 
@@ -259,10 +251,53 @@ function put(draft: State, tabId: number, state: TabState) {
   else delete draft.tabs[tabId];
 }
 
-/** Reload if asked (or if the reloadOnChange setting is on), then describe the tab. */
-async function finish(tab: Tab, state: State, reload: boolean | undefined): Promise<TabInfo> {
-  if (reload ?? state.settings.reloadOnChange) await browser.tabs.reload(tab.id);
-  return info(tab, state);
+/** Why `name` is not an own header of the tab: it comes from a preset, or the tab lacks it. */
+function notOwn(state: State, tabId: number, name: string): LaneheadError {
+  const { preset, global } = laneOf(state.tabs[tabId], state.presets, state.global);
+  const message = !preset?.headers.some((h) => h.name === name)
+    ? `Tab ${tabId} has no header "${name}"; run \`lanehead get ${tabId}\`.`
+    : global
+      ? `"${name}" comes from the all-tabs preset ${preset.name}; run \`lanehead set ${tabId} --off\` to stop it for this tab.`
+      : `"${name}" comes from preset ${preset.name}; run \`lanehead set ${tabId} --no-preset\` to drop the preset.`;
+  return new LaneheadError('NOT_OWN', message);
+}
+
+/** What a tab with no recorded page load loaded with: nothing. */
+const NOTHING = fingerprint({ lane: null, global: false, headers: [] });
+
+/** Headers only matter to web pages. */
+const isWeb = (url = '') => /^https?:/.test(url);
+
+/** The tab would send other headers than its current page loaded with. */
+function isStale(tab: Browser.tabs.Tab, state: State): boolean {
+  const id = tab.id ?? -1;
+  return isWeb(tab.url) && sends(state, id) !== (state.loaded[id] ?? NOTHING);
+}
+
+/**
+ * Runs `change` in the writer, then reloads tab `reload` (if given) and, with reloadOnChange,
+ * every web tab the change made stale. Resolves with the newest state.
+ */
+async function mutate(change: (draft: State) => void, reload?: number | false): Promise<State> {
+  let before: State | undefined;
+  const after = await update((draft) => {
+    before = structuredClone(draft);
+    change(draft);
+    return draft;
+  });
+  const changed = (t: Browser.tabs.Tab) =>
+    before && sends(before, t.id ?? -1) !== sends(after, t.id ?? -1) && isStale(t, after);
+  const ids = (await browser.tabs.query({}))
+    .filter((t) => t.id === reload || (after.settings.reloadOnChange && changed(t)))
+    .map((t) => t.id as number);
+  await Promise.all(ids.map(reloadTab));
+  return ids.length ? current() : after;
+}
+
+/** Reloads a tab; its new page loads with what the tab sends now. */
+async function reloadTab(tabId: number): Promise<void> {
+  await browser.tabs.reload(tabId);
+  await markLoaded(tabId);
 }
 
 function info(tab: Browser.tabs.Tab, state: State): TabInfo {
@@ -276,6 +311,7 @@ function info(tab: Browser.tabs.Tab, state: State): TabInfo {
     global: lane.global,
     headers: Object.fromEntries(lane.headers.map((h) => [h.name, h.value])),
     own: state.tabs[id]?.headers.map((h) => h.name) ?? [],
+    ...(isStale(tab, state) && { stale: true }),
   };
 }
 

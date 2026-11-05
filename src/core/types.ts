@@ -20,7 +20,8 @@ export type Preset = {
 /**
  * A tab's own state. No state = default: no headers of its own, the global preset applies if on.
  * - `preset`: preset id
- * - `headers`: the tab's own headers, sent to every site; win over the preset's on the same name
+ * - `headers`: the tab's own headers; win over the preset's on the same name; sent where the
+ *   preset is (its domains), or everywhere without a preset
  * - `off`: no headers and excluded from global; only with no preset and no headers
  */
 export type TabState = { preset?: string; headers: Header[]; off?: true };
@@ -29,15 +30,14 @@ export type Settings = {
   inheritOnOpen: boolean;
   reloadOnChange: boolean;
   agentControl: boolean;
-  /** This browser profile's name for agents. */
+  /** This browser profile's name for agents; defaults to the browser's brand. */
   label: string;
 };
 
-export const DEFAULT_SETTINGS: Settings = {
+export const DEFAULT_SETTINGS: Omit<Settings, 'label'> = {
   inheritOnOpen: true,
   reloadOnChange: false,
   agentControl: true,
-  label: 'Chrome',
 };
 
 /** What a tab sends, as reported by the API. */
@@ -54,6 +54,8 @@ export type TabInfo = {
   headers: Record<string, string>;
   /** Names of the tab's own headers (the ones `clear` can remove by name). */
   own: string[];
+  /** The tab would send other headers than its current page loaded with: reload to apply. */
+  stale?: true;
 };
 
 /** State of the native bridge. */

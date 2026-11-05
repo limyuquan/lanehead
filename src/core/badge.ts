@@ -32,7 +32,7 @@ export function deriveBadge(text: string): string {
   const s = alnum(base);
   if (s.length <= 4) return s;
   const end = base.match(/[_-]([\p{L}\p{N}]{1,2})$|(\p{N}{1,2})$/u);
-  const tail = end ? alnum(end[1] ?? end[2]) : '';
+  const tail = end ? alnum(end[1] ?? end[2] ?? '') : '';
   return s.slice(0, 4 - tail.length) + tail;
 }
 

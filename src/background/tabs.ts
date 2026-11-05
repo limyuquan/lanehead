@@ -1,7 +1,7 @@
 /** Tab lifecycle: state follows tabs as they close, get replaced or open other tabs. */
 import { browser } from 'wxt/browser';
 import { badgeTab } from './badge';
-import { current, update } from './store';
+import { current, markLoaded, update } from './store';
 
 function logError(err: unknown) {
   console.error('[lanehead]', err);
@@ -15,7 +15,12 @@ export function installTabListeners(): void {
       .catch(logError);
   };
   browser.tabs.onCreated.addListener((tab) => tab.id !== undefined && rebadge(tab.id));
-  browser.webNavigation.onCommitted.addListener((nav) => nav.frameId === 0 && rebadge(nav.tabId));
+  browser.webNavigation.onCommitted.addListener(({ frameId, tabId }) => {
+    if (frameId !== 0) return;
+    rebadge(tabId);
+    // A new page: it loaded with what the tab sends now, so the tab is no longer stale.
+    markLoaded(tabId).catch(logError);
+  });
 
   /**
    * A tab opened by a page (target=_blank link, ⌘/Ctrl-click, `window.open`) gets a copy of its
@@ -43,15 +48,19 @@ export function installTabListeners(): void {
 
   // Always queued, even for tabs with no state: a `set` on this tab may still be in the queue.
   browser.tabs.onRemoved.addListener((tabId) => {
-    update((draft) => void delete draft.tabs[tabId]).catch(logError);
+    update((draft) => {
+      delete draft.tabs[tabId];
+      delete draft.loaded[tabId];
+    }).catch(logError);
   });
 
   browser.tabs.onReplaced.addListener((addedId, removedId) => {
     update((draft) => {
-      const moved = draft.tabs[removedId];
-      if (!moved) return;
-      delete draft.tabs[removedId];
-      draft.tabs[addedId] = moved;
+      for (const map of [draft.tabs, draft.loaded] as Record<number, unknown>[]) {
+        if (!(removedId in map)) continue;
+        map[addedId] = map[removedId];
+        delete map[removedId];
+      }
     }).catch(logError);
   });
 }
@@ -60,8 +69,10 @@ export function installTabListeners(): void {
 export async function reconcile(): Promise<void> {
   const open = new Set((await browser.tabs.query({})).map((t) => t.id));
   await update((draft) => {
-    for (const id of Object.keys(draft.tabs).map(Number)) {
-      if (!open.has(id)) delete draft.tabs[id];
+    for (const map of [draft.tabs, draft.loaded]) {
+      for (const id of Object.keys(map).map(Number)) {
+        if (!open.has(id)) delete map[id];
+      }
     }
   });
 }

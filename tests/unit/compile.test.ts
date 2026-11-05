@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compile, laneOf } from '@/core/compile';
+import { compile, fingerprint, laneOf } from '@/core/compile';
 import type { Preset, TabState } from '@/core/types';
 
 const staging: Preset = {
@@ -53,7 +53,7 @@ describe('compile', () => {
     expect(compile([], tabs, null)[0]?.condition).not.toHaveProperty('requestDomains');
   });
 
-  it('preset + own: preset part without overridden names, scoped to its domains', () => {
+  it('preset + own: preset part without overridden names; both scoped to its domains', () => {
     const tabs = { 7: { preset: 'scoped', headers: [{ name: 'x-env', value: 'mine' }] } };
     expect(compile([scoped], tabs, null)).toMatchObject([
       {
@@ -62,15 +62,26 @@ describe('compile', () => {
         condition: { tabIds: [7], requestDomains: ['example.com'] },
         action: { requestHeaders: set({ 'x-canary': '1' }) },
       },
-      { id: 2, priority: 3, action: { requestHeaders: set({ 'x-env': 'mine' }) } },
+      {
+        id: 2,
+        priority: 3,
+        condition: { tabIds: [7], requestDomains: ['example.com'] },
+        action: { requestHeaders: set({ 'x-env': 'mine' }) },
+      },
     ]);
   });
 
-  it('own headers overriding every preset header: no preset part', () => {
-    const own = staging.headers.map((h) => ({ ...h, value: 'x' }));
-    expect(
-      compile([staging], { 7: { preset: 'staging', headers: own } }, null).map((r) => r.priority),
-    ).toEqual([3]);
+  it('own headers overriding every preset header: no preset part, still the preset scope', () => {
+    const own = scoped.headers.map((h) => ({ ...h, value: 'x' }));
+    const rules = compile([scoped], { 7: { preset: 'scoped', headers: own } }, null);
+    expect(rules.map((r) => [r.priority, r.condition.requestDomains])).toEqual([
+      [3, ['example.com']],
+    ]);
+  });
+
+  it('own headers with a preset that has no domains go to every site', () => {
+    const tabs = { 7: { preset: 'staging', headers: [{ name: 'a', value: '1' }] } };
+    expect(compile([staging], tabs, null)[1]?.condition).not.toHaveProperty('requestDomains');
   });
 
   it('rule ids are 1, 2, 3… even for tab ids past 2^30', () => {
@@ -99,9 +110,31 @@ describe('compile', () => {
     expect(rules[0]?.condition.excludedTabIds).toEqual([3, 5]);
   });
 
-  it('a tab pointing at a deleted preset gets only its own headers', () => {
+  it('a tab pointing at a deleted preset gets only its own headers, to every site', () => {
     const tabs = { 5: { preset: 'gone', headers: [{ name: 'a', value: '1' }] } };
-    expect(compile([staging], tabs, null).map((r) => r.priority)).toEqual([3]);
+    const rules = compile([scoped], tabs, null);
+    expect(rules.map((r) => r.priority)).toEqual([3]);
+    expect(rules[0]?.condition).not.toHaveProperty('requestDomains');
+  });
+});
+
+describe('fingerprint', () => {
+  const lane = (state: TabState | undefined, global: string | null = null) =>
+    fingerprint(laneOf(state, [staging, scoped], global));
+  const own = (value: string) => ({ headers: [{ name: 'x-env', value }] });
+
+  it('equal when the same headers go to the same sites, whatever their order or source', () => {
+    expect(lane(undefined)).toBe(lane({ headers: [], off: true }));
+    expect(lane({ preset: 'staging', headers: [] })).toBe(lane(undefined, 'staging'));
+    expect(lane({ headers: [...staging.headers].reverse() })).toBe(
+      lane({ preset: 'staging', headers: [] }),
+    );
+  });
+
+  it('differs when a value, a header or the domains change', () => {
+    expect(lane(own('a'))).not.toBe(lane(own('b')));
+    expect(lane(own('a'))).not.toBe(lane(undefined));
+    expect(lane({ preset: 'staging', headers: [] })).not.toBe(lane({ preset: 'scoped', headers: [] }));
   });
 });
 
