@@ -102,4 +102,8 @@ test('manage', async ({ context, lh }) => {
       await manage.screenshot({ path: shot(`manage-${section}-${scheme}`), fullPage: true });
     }
   }
+  await manage.goto(`chrome-extension://${EXTENSION_ID}/manage.html#presets`);
+  await manage.getByRole('button', { name: 'Edit staging' }).click();
+  await manage.emulateMedia({ colorScheme: 'light' });
+  await manage.screenshot({ path: shot('manage-preset-edit-light'), fullPage: true });
 });
