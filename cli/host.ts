@@ -67,12 +67,10 @@ export function host(): void {
     const lines = readline.createInterface({ input: socket });
     lines.on('error', () => {}); // the socket's, re-emitted: the CLI gave up (timeout, Ctrl-C)
     lines.on('line', (line) => {
-      let req: { id?: unknown; op?: unknown; args?: unknown };
-      try {
-        if (line.length > MAX_LINE) throw new Error();
-        req = JSON.parse(line);
-      } catch {
-        const message = 'Send one JSON request per line, under 1 MB.';
+      const req = parseRequest(line);
+      if (!req) {
+        const message =
+          'Send one JSON request per line, under 1 MB: {"v":1,"id":1,"op":"tabs","args":{}}.';
         answer(null, { ok: false, error: { code: 'BAD_REQUEST', message } });
         return;
       }
@@ -82,4 +80,22 @@ export function host(): void {
       send({ id, op: req.op, args: req.args });
     });
   }
+}
+
+type Request = { id?: unknown; op: string; args?: object };
+
+/** A request line → `{id, op, args}`; undefined unless it is a JSON object with a string op and object args. */
+export function parseRequest(line: string): Request | undefined {
+  if (line.length > MAX_LINE) return undefined;
+  let req: unknown;
+  try {
+    req = JSON.parse(line);
+  } catch {
+    return undefined;
+  }
+  const isObject = (x: unknown): x is Record<string, unknown> =>
+    typeof x === 'object' && x !== null && !Array.isArray(x);
+  if (!isObject(req) || typeof req.op !== 'string') return undefined;
+  if (req.args !== undefined && !isObject(req.args)) return undefined;
+  return req as Request;
 }

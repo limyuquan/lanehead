@@ -1,7 +1,7 @@
 /** Command line → command. See docs/CONTRACTS.md section 6. */
 import { parseArgs } from 'node:util';
 import { parseHeaderLines } from '../src/core/headers';
-import type { Op } from '../src/core/types';
+import { type Header, LaneheadError, type Op } from '../src/core/types';
 
 /** A failure and its exit status: 1 operation error, 2 usage error, 3 not connected. */
 export class CliError extends Error {
@@ -32,6 +32,7 @@ const OPTIONS = {
   url: { type: 'string' },
   header: { type: 'string', short: 'H', multiple: true },
   preset: { type: 'string', short: 'p' },
+  'no-preset': { type: 'boolean' },
   replace: { type: 'boolean' },
   off: { type: 'boolean' },
   reload: { type: 'boolean' },
@@ -48,12 +49,13 @@ const SPECS: Record<string, [usage: string, options: string[], min: number, max:
   tabs: ['tabs [--url <text>]', ['url'], 0, 0],
   get: ['get <tab>', [], 1, 1],
   set: [
-    "set <tab> [-H 'name: value']... [-p <preset>] [--replace] [--off] [--reload]",
-    ['header', 'preset', 'replace', 'off', 'reload'],
+    "set <tab> [-H 'name: value']... [-p <preset> | --no-preset] [--replace] [--off] [--reload]",
+    ['header', 'preset', 'no-preset', 'replace', 'off', 'reload'],
     1,
     1,
   ],
   clear: ['clear <tab> [<name>...] [--reload]', ['reload'], 1, Infinity],
+  reload: ['reload <tab>', [], 1, 1],
   open: [
     "open <url> [-H 'name: value']... [-p <preset>] [--focus]",
     ['header', 'preset', 'focus'],
@@ -79,6 +81,30 @@ export const HELP = `${Object.values(SPECS)
 
 const usageError = (message: string) => new CliError('BAD_REQUEST', message, 2);
 
+/** `-H` values → headers. A value without a colon gets its corrected form in the message. */
+function parseHeaders(values: string[]): Header[] {
+  try {
+    for (const value of values) {
+      if (value.includes(':')) continue;
+      const [, name = value, rest = '<value>'] = /^\s*([^\s=]+)[\s=]+(.+)$/.exec(value) ?? [];
+      throw new LaneheadError('BAD_HEADER', `Write "${value}" as -H '${name}: ${rest.trim()}'.`);
+    }
+    return parseHeaderLines(values.join('\n'));
+  } catch (err) {
+    throw new CliError('BAD_HEADER', (err as Error).message, 2);
+  }
+}
+
+/**
+ * A URL with a scheme is kept; without one, localhost, 127.* and [::1] get http://, anything
+ * else https://.
+ */
+export function withScheme(url: string): string {
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) return url;
+  const local = /^(localhost|127\.[\d.]+|\[::1\])([:/?#]|$)/i.test(url);
+  return `${local ? 'http' : 'https'}://${url}`;
+}
+
 export function parse(argv: string[]): Command {
   let parsed: ReturnType<typeof parseArgs<{ options: typeof OPTIONS; allowPositionals: true }>>;
   try {
@@ -103,10 +129,11 @@ export function parse(argv: string[]): Command {
 
   const [first = ''] = rest;
   const tab = () => {
-    if (!/^\d+$/.test(first)) throw fail(`"${first}" is not a tab id (a number from \`tabs\`)`);
+    if (!/^\d+$/.test(first))
+      throw fail(`"${first}" is not a tab id (a number from \`lanehead tabs\`)`);
     return Number(first);
   };
-  const headers = v.header && parseHeaderLines(v.header.join('\n'));
+  const headers = v.header && parseHeaders(v.header);
   const op = (op: Op, args: object, timeout = 10_000): Command => ({
     ...common,
     kind: 'op',
@@ -120,23 +147,36 @@ export function parse(argv: string[]): Command {
       return op('tabs', { url: v.url });
     case 'get':
       return op('get', { tab: tab() });
-    case 'set':
+    case 'set': {
+      const id = tab();
+      const noPreset = v['no-preset'];
+      if (noPreset && v.preset !== undefined) throw fail('Pass -p or --no-preset, not both');
+      if (!headers && v.preset === undefined && !noPreset && !v.off) {
+        throw usageError('Pass -H, -p, --no-preset or --off.');
+      }
       return op('set', {
-        tab: tab(),
+        tab: id,
         headers,
-        preset: v.preset,
+        preset: noPreset ? null : v.preset,
         replace: v.replace,
         off: v.off,
         reload: v.reload,
       });
+    }
     case 'clear':
       return op('clear', {
         tab: tab(),
         names: rest.length > 1 ? rest.slice(1) : undefined,
         reload: v.reload,
       });
+    case 'reload':
+      return op('reload', { tab: tab() });
     case 'open':
-      return op('open', { url: first, headers, preset: v.preset, focus: v.focus }, 30_000);
+      return op(
+        'open',
+        { url: withScheme(first), headers, preset: v.preset, focus: v.focus },
+        30_000,
+      );
     case 'presets':
       return op('presets', {});
     case 'global':

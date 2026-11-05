@@ -13,7 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { EXTENSION_ID, HOST_NAME } from '../src/shared/ids';
 import { type BrowserName, CliError } from './args';
-import { hint, type Instance, instances } from './client';
+import { hint, type Instance, instances, live } from './client';
 import { home, hostScript } from './home';
 
 /** Per-user browser data dirs: [macOS under ~/Library/Application Support, Linux under ~/.config]. */
@@ -63,11 +63,12 @@ export async function install(opts: {
     const message = 'Agent control needs macOS or Linux; on Windows, use the Lanehead popup.';
     throw new CliError('BAD_REQUEST', message, 1);
   }
+  const before = new Set(await live());
   // The host is this very file, copied so it survives package updates and moves.
   const self = fileURLToPath(import.meta.url);
   mkdirSync(path.dirname(hostScript()), { recursive: true });
   if (self !== hostScript()) copyFileSync(self, hostScript());
-  const wrapper = path.join(home(), 'host', 'lanehead-host');
+  const wrapper = wrapperPath();
   writeFileSync(wrapper, launcher('host'), { mode: 0o755 });
 
   const [mac, linux] = DATA_DIRS[opts.browser];
@@ -107,16 +108,18 @@ export async function install(opts: {
     }),
   );
 
-  // The browser retries every 30 s, so a running one connects within that.
-  const deadline = Date.now() + 60_000;
+  // The browser retries every 30 s, so a running one connects within that: wait for a browser
+  // that was not connected before.
+  const deadline = Date.now() + 35_000;
+  const fresh = (list: Instance[]) => list.some((i) => !before.has(i.instance));
   let found = await instances();
-  while (!found.length && Date.now() < deadline) {
+  while (!fresh(found) && Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 500));
     found = await instances();
   }
   const hints = [
     !placed && `For a \`lanehead\` command, create ${bin}, add it to PATH, and rerun install.`,
-    !found.length && hint(),
+    !fresh(found) && hint('No new browser is'),
   ].filter(Boolean);
   return {
     manifest,
@@ -126,13 +129,39 @@ export async function install(opts: {
   };
 }
 
-/** Removes what install wrote; the sockets belong to running hosts and go with them. */
+const wrapperPath = () => path.join(home(), 'host', 'lanehead-host');
+
+/** Whether `file` is a file whose text passes `test`. */
+function holds(file: string, test: (text: string) => boolean): boolean {
+  try {
+    return test(readFileSync(file, 'utf8'));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Removes what install wrote, and only while it is still ours: manifests naming our host and
+ * wrapper, a launcher with our mark running our host. Recursive only for `<home>/host`. The
+ * sockets belong to running hosts and go with them.
+ */
 export function uninstall(): { removed: string[] } {
   const { manifests, shim } = readRecord();
-  const removed = [...manifests, ...(shim ? [shim] : []), path.dirname(hostScript())].filter((f) =>
-    existsSync(f),
-  );
-  for (const f of removed) rmSync(f, { recursive: true, force: true });
+  const ours = [
+    ...manifests.filter((f) =>
+      holds(f, (text) => {
+        const { name, path: host } = JSON.parse(text);
+        return name === HOST_NAME && host === wrapperPath();
+      }),
+    ),
+    ...(shim && holds(shim, (text) => text.includes(MARK) && text.includes(hostScript()))
+      ? [shim]
+      : []),
+  ];
+  for (const f of ours) rmSync(f);
+  const hostDir = path.dirname(hostScript());
+  const removed = existsSync(hostDir) ? [...ours, hostDir] : ours;
+  rmSync(hostDir, { recursive: true, force: true });
   rmSync(recordFile(), { force: true });
   return { removed };
 }

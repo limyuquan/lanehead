@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CliError, parse } from './args';
+import { CliError, parse, withScheme } from './args';
 
 const fails = (argv: string[]) => {
   try {
@@ -47,15 +47,48 @@ describe('parse', () => {
         ],
       },
     });
-    expect(fails(['set', '1', '-H', 'novalue'])).toMatchObject({ code: 'BAD_HEADER' });
-    expect(fails(['set', '1', '-H', 'a: 1', '-H', 'A: 2'])).toMatchObject({ code: 'BAD_HEADER' });
+    expect(fails(['set', '1', '-H', 'a: 1', '-H', 'A: 2'])).toMatchObject({
+      code: 'BAD_HEADER',
+      exit: 2,
+    });
   });
 
-  it('open gets the longer timeout', () => {
+  it('a -H without a colon is a usage error that shows the corrected form', () => {
+    expect(fails(['set', '1', '-H', 'x-env=lane_a'])).toMatchObject({
+      code: 'BAD_HEADER',
+      exit: 2,
+      message: `Write "x-env=lane_a" as -H 'x-env: lane_a'.`,
+    });
+    expect(fails(['open', 'x.test', '-H', 'x-env lane_a']).message).toContain("-H 'x-env: lane_a'");
+    expect(fails(['set', '1', '-H', 'novalue']).message).toContain("-H 'novalue: <value>'");
+  });
+
+  it('set: --no-preset is preset null; it needs something to do', () => {
+    expect(parse(['set', '3', '--no-preset'])).toMatchObject({ args: { tab: 3, preset: null } });
+    expect(parse(['set', '3', '--off'])).toMatchObject({ args: { off: true } });
+    expect(fails(['set', '3'])).toMatchObject({
+      code: 'BAD_REQUEST',
+      exit: 2,
+      message: 'Pass -H, -p, --no-preset or --off.',
+    });
+    expect(fails(['set', '3', '--reload', '--replace']).message).toBe(
+      'Pass -H, -p, --no-preset or --off.',
+    );
+    expect(fails(['set', '3', '-p', 'a', '--no-preset'])).toMatchObject({ exit: 2 });
+  });
+
+  it('reload takes a tab', () => {
+    expect(parse(['reload', '4'])).toMatchObject({ op: 'reload', args: { tab: 4 } });
+  });
+
+  it('open gets the longer timeout and a default scheme', () => {
     expect(parse(['open', 'https://x.test', '--focus'])).toMatchObject({
       op: 'open',
       args: { url: 'https://x.test', focus: true },
       timeout: 30_000,
+    });
+    expect(parse(['open', 'localhost:3000/a'])).toMatchObject({
+      args: { url: 'http://localhost:3000/a' },
     });
   });
 
@@ -89,5 +122,20 @@ describe('parse', () => {
       userDataDir: '/p',
       extensionIds: ['a'.repeat(32)],
     });
+  });
+});
+
+describe('withScheme', () => {
+  it.each([
+    ['localhost', 'http://localhost'],
+    ['localhost:5173/x?y=1', 'http://localhost:5173/x?y=1'],
+    ['127.0.0.1:8080', 'http://127.0.0.1:8080'],
+    ['[::1]:3000', 'http://[::1]:3000'],
+    ['example.com/a', 'https://example.com/a'],
+    ['localhost.example.com', 'https://localhost.example.com'],
+    ['http://example.com', 'http://example.com'],
+    ['ftp://x', 'ftp://x'],
+  ])('%s → %s', (url, expected) => {
+    expect(withScheme(url)).toBe(expected);
   });
 });

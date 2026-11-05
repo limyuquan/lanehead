@@ -3,8 +3,9 @@ import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import readline from 'node:readline';
-import type { Status } from '../src/core/types';
-import { CliError } from './args';
+import type { Preset, Status, TabInfo } from '../src/core/types';
+import { CliError, type Command } from './args';
+import { isOwnPage, nameOf, presetList, tabDetail, tabEntry, tabResult } from './format';
 import { hostScript, runDir } from './home';
 
 export type Instance = Pick<Status, 'instance' | 'label' | 'browser' | 'version'>;
@@ -12,9 +13,12 @@ export type Instance = Pick<Status, 'instance' | 'label' | 'browser' | 'version'
 /** "<who> connected; <what to do>." */
 export function hint(who = 'No browser is'): string {
   return existsSync(hostScript())
-    ? `${who} connected; ask the user to open Chrome with the Lanehead extension and its agent control on.`
-    : `${who} connected; run \`lanehead install\`, then ask the user to enable the Lanehead extension in Chrome.`;
+    ? `${who} connected; ask the user to open the browser with the Lanehead extension and its agent control on, then run \`lanehead status\`.`
+    : `${who} connected; run \`lanehead install\`, then ask the user to enable the Lanehead extension in the browser.`;
 }
+
+/** Errors the caller fixes by changing the command: exit 2. */
+const USAGE = new Set(['BAD_HEADER', 'BAD_URL', 'BAD_REQUEST', 'AMBIGUOUS_INSTANCE']);
 
 const socketOf = (instance: string) => path.join(runDir(), `${instance}.sock`);
 
@@ -69,7 +73,10 @@ export function request(instance: string, op: string, args: object, timeout = 10
       socket.end();
       const reply = JSON.parse(line);
       if (reply.ok) resolve(reply.result);
-      else reject(new CliError(reply.error.code, reply.error.message, 1));
+      else {
+        const { code, message } = reply.error;
+        reject(new CliError(code, message, USAGE.has(code) ? 2 : 1));
+      }
     });
   });
 }
@@ -84,13 +91,78 @@ export async function instances(): Promise<Instance[]> {
   );
 }
 
-/** The browser to talk to: `-i`, else `LANEHEAD_INSTANCE`, else the only connected one. */
-export async function pick(instance = process.env.LANEHEAD_INSTANCE): Promise<string> {
-  if (instance) return instance;
-  const ids = await live();
-  if (ids.length === 1) return ids[0] as string;
+type OpCommand = Extract<Command, { kind: 'op' }>;
+
+/**
+ * Runs an op in the browser it belongs to and returns the lean output (cli/format.ts):
+ * - `-i`, else `LANEHEAD_INSTANCE`, else the only connected browser;
+ * - several connected: `tabs` lists them all, an op on a tab goes to the browser that has the
+ *   tab, anything else needs `-i`.
+ */
+export async function runOp(cmd: OpCommand): Promise<unknown> {
+  const { op, args, timeout } = cmd;
+  const instance = cmd.instance ?? process.env.LANEHEAD_INSTANCE;
+  const ids = instance ? [instance] : await live();
   if (!ids.length) throw new CliError('NOT_CONNECTED', hint(), 3);
-  const list = await instances();
+  if (op === 'tabs') {
+    const lists = await Promise.all(ids.map((id) => request(id, op, args, timeout)));
+    const several = ids.length > 1;
+    return {
+      tabs: (lists as { tabs: TabInfo[] }[]).flatMap(({ tabs }, n) =>
+        tabs.filter((t) => !isOwnPage(t)).map((t) => tabEntry(t, several ? ids[n] : undefined)),
+      ),
+    };
+  }
+  const target =
+    ids.length === 1
+      ? (ids[0] as string)
+      : 'tab' in args
+        ? await holder(ids, args.tab)
+        : await ambiguous(ids);
+  const result = await request(target, op, args, timeout);
+  switch (op) {
+    case 'get':
+      return tabDetail(result as TabInfo);
+    case 'set':
+    case 'clear':
+    case 'open':
+    case 'reload':
+      return tabResult(result as TabInfo);
+    case 'presets': {
+      const { presets, global } = result as { presets: Preset[]; global: string | null };
+      return presetList(presets, global);
+    }
+    case 'global': {
+      const { presets } = (await request(target, 'presets', {})) as { presets: Preset[] };
+      return { global: nameOf(presets, (result as { global: string | null }).global) };
+    }
+    default:
+      return result;
+  }
+}
+
+/** The one browser among `ids` that has tab `tab`. */
+async function holder(ids: string[], tab: unknown): Promise<string> {
+  const has = await Promise.all(
+    ids.map((id) =>
+      request(id, 'get', { tab }).then(
+        () => true,
+        (err: CliError) => {
+          if (err.code === 'NO_TAB') return false;
+          throw err;
+        },
+      ),
+    ),
+  );
+  const found = ids.filter((_, n) => has[n]);
+  if (found.length === 1) return found[0] as string;
+  if (!found.length) throw new CliError('NO_TAB', `No tab ${tab}; run \`lanehead tabs\`.`, 1);
+  return ambiguous(found);
+}
+
+/** Throws AMBIGUOUS_INSTANCE listing `ids` with their labels. */
+async function ambiguous(ids: string[]): Promise<never> {
+  const list = (await instances()).filter((i) => ids.includes(i.instance));
   const message = `Several browsers are connected; pass -i <instance>: ${list.map((i) => `${i.instance} (${i.label})`).join(', ')}.`;
   throw new CliError('AMBIGUOUS_INSTANCE', message, 2, {
     instances: list.map(({ instance, label }) => ({ instance, label })),

@@ -9,14 +9,14 @@
 import SKILL from '../skill/SKILL.md';
 import { LaneheadError } from '../src/core/types';
 import { CliError, type Command, HELP, parse } from './args';
-import { hint, instances, pick, request } from './client';
+import { hint, instances, runOp } from './client';
 import { host } from './host';
 import { install, installSkill, uninstall } from './install';
 
 async function run(cmd: Command): Promise<unknown> {
   switch (cmd.kind) {
     case 'op':
-      return request(await pick(cmd.instance), cmd.op, cmd.args, cmd.timeout);
+      return runOp(cmd);
     case 'status': {
       const found = await instances();
       return found.length ? { instances: found } : { instances: found, hint: hint() };
