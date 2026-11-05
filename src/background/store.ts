@@ -72,10 +72,11 @@ export function update<T>(change: (draft: State) => T | Promise<T>): Promise<T> 
     } catch (err) {
       throw new LaneheadError('RULES_FAILED', `Chrome rejected the header rules: ${String(err)}`);
     }
+    // Reads see the new state before storage.onChanged tells pages to re-read.
+    loaded = Promise.resolve(draft);
     const { presets, global, settings, tabs } = draft;
     await browser.storage.local.set({ presets, global, settings });
     await browser.storage.session.set({ tabs });
-    loaded = Promise.resolve(draft);
     await refreshBadges(draft);
     return result;
   });
