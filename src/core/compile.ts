@@ -54,57 +54,59 @@ export function laneOf(
 /**
  * The complete session ruleset:
  *
- * | rule              | id          | priority | condition                                  | headers                       |
- * |-------------------|-------------|----------|--------------------------------------------|-------------------------------|
- * | global            | 1           | 1        | excludedTabIds: every tab with a state     | global preset                 |
- * | tab, preset part  | 2·tabId + 2 | 2        | tabIds: [tabId], preset's requestDomains   | preset's, minus own names     |
- * | tab, own part     | 2·tabId + 3 | 3        | tabIds: [tabId]                            | own                           |
+ * | rule              | priority | condition                                  | headers                   |
+ * |-------------------|----------|--------------------------------------------|---------------------------|
+ * | global            | 1        | excludedTabIds: every tab with a state     | global preset             |
+ * | tab, preset part  | 2        | tabIds: [tabId], preset's requestDomains   | preset's, minus own names |
+ * | tab, own part     | 3        | tabIds: [tabId]                            | own                       |
  *
- * Off tabs and empty parts get no rule. Each header name is set by one rule per tab, so
- * priorities never decide a conflict.
+ * Ids are 1, 2, 3… in that order (tab ids are too large to derive rule ids from, and the
+ * ruleset is always replaced whole). Off tabs and empty parts get no rule. Each header name is
+ * set by one rule per tab, so priorities never decide a conflict.
  */
 export function compile(
   presets: Preset[],
   tabs: Record<number, TabState>,
   global: string | null,
 ): Rule[] {
-  const rule = (
-    id: number,
+  const rules: Rule[] = [];
+  const add = (
     priority: number,
     headers: Header[],
     condition: Rule['condition'],
     domains: string[] = [],
-  ): Rule => ({
-    id,
-    priority,
-    action: {
-      type: 'modifyHeaders',
-      requestHeaders: headers.map(({ name, value }) => ({ header: name, operation: 'set', value })),
-    },
-    condition: {
-      ...condition,
-      resourceTypes: [...RESOURCE_TYPES],
-      ...(domains.length && { requestDomains: domains }),
-    },
-  });
+  ) =>
+    rules.push({
+      id: rules.length + 1,
+      priority,
+      action: {
+        type: 'modifyHeaders',
+        requestHeaders: headers.map(({ name, value }) => ({
+          header: name,
+          operation: 'set',
+          value,
+        })),
+      },
+      condition: {
+        ...condition,
+        resourceTypes: [...RESOURCE_TYPES],
+        ...(domains.length && { requestDomains: domains }),
+      },
+    });
 
-  const rules: Rule[] = [];
   const states = Object.entries(tabs).map(([id, state]) => [Number(id), state] as const);
   const globalPreset = presets.find((p) => p.id === global);
   if (globalPreset) {
     const excluded = states.length ? { excludedTabIds: states.map(([id]) => id) } : {};
-    rules.push(rule(1, 1, globalPreset.headers, excluded, globalPreset.domains));
+    add(1, globalPreset.headers, excluded, globalPreset.domains);
   }
   for (const [tabId, state] of states) {
     if (state.off) continue;
     const own = new Set(state.headers.map((h) => h.name));
     const preset = presets.find((p) => p.id === state.preset);
     const presetPart = preset?.headers.filter((h) => !own.has(h.name)) ?? [];
-    if (preset && presetPart.length) {
-      rules.push(rule(2 * tabId + 2, 2, presetPart, { tabIds: [tabId] }, preset.domains));
-    }
-    if (state.headers.length)
-      rules.push(rule(2 * tabId + 3, 3, state.headers, { tabIds: [tabId] }));
+    if (preset && presetPart.length) add(2, presetPart, { tabIds: [tabId] }, preset.domains);
+    if (state.headers.length) add(3, state.headers, { tabIds: [tabId] });
   }
   return rules;
 }

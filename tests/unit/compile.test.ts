@@ -44,7 +44,7 @@ describe('compile', () => {
     };
     expect(compile([], tabs, null)).toMatchObject([
       {
-        id: 17,
+        id: 1,
         priority: 3,
         condition: { tabIds: [7] },
         action: { requestHeaders: set({ 'x-env': 'lane_a' }) },
@@ -57,19 +57,28 @@ describe('compile', () => {
     const tabs = { 7: { preset: 'scoped', headers: [{ name: 'x-env', value: 'mine' }] } };
     expect(compile([scoped], tabs, null)).toMatchObject([
       {
-        id: 16,
+        id: 1,
         priority: 2,
         condition: { tabIds: [7], requestDomains: ['example.com'] },
         action: { requestHeaders: set({ 'x-canary': '1' }) },
       },
-      { id: 17, priority: 3, action: { requestHeaders: set({ 'x-env': 'mine' }) } },
+      { id: 2, priority: 3, action: { requestHeaders: set({ 'x-env': 'mine' }) } },
     ]);
   });
 
   it('own headers overriding every preset header: no preset part', () => {
     const own = staging.headers.map((h) => ({ ...h, value: 'x' }));
-    expect(compile([staging], { 7: { preset: 'staging', headers: own } }, null).map((r) => r.id)).toEqual([
-      17,
+    expect(
+      compile([staging], { 7: { preset: 'staging', headers: own } }, null).map((r) => r.priority),
+    ).toEqual([3]);
+  });
+
+  it('rule ids are 1, 2, 3… even for tab ids past 2^30', () => {
+    const tabs = { 1102822209: { preset: 'staging', headers: [{ name: 'a', value: '1' }] } };
+    expect(compile([staging], tabs, 'staging').map((r) => [r.id, r.priority])).toEqual([
+      [1, 1],
+      [2, 2],
+      [3, 3],
     ]);
   });
 
@@ -83,13 +92,16 @@ describe('compile', () => {
       5: { preset: 'staging', headers: [] },
     };
     const rules = compile([staging], tabs, 'staging');
-    expect(rules.map((r) => r.id)).toEqual([1, 12]);
+    expect(rules.map((r) => [r.priority, r.condition.tabIds])).toEqual([
+      [1, undefined],
+      [2, [5]],
+    ]);
     expect(rules[0]?.condition.excludedTabIds).toEqual([3, 5]);
   });
 
   it('a tab pointing at a deleted preset gets only its own headers', () => {
     const tabs = { 5: { preset: 'gone', headers: [{ name: 'a', value: '1' }] } };
-    expect(compile([staging], tabs, null).map((r) => r.id)).toEqual([13]);
+    expect(compile([staging], tabs, null).map((r) => r.priority)).toEqual([3]);
   });
 });
 

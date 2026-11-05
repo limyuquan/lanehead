@@ -3,40 +3,39 @@ import { browser } from 'wxt/browser';
 import { badgeTab } from './badge';
 import { current, update } from './store';
 
-/**
- * Give a new tab a copy of its opener's state, if `inheritOnOpen` and the opener has one.
- * Called from both `tabs.onCreated` and `webNavigation.onCreatedNavigationTarget`; whichever
- * comes second finds the state already there and does nothing.
- */
-async function inherit(tabId: number, openerId: number): Promise<void> {
-  const { settings, tabs } = await current();
-  // Most openers have no state: skip the rules rewrite.
-  if (!settings.inheritOnOpen || !tabs[openerId]) return;
-  await update((draft) => {
-    const opener = draft.tabs[openerId];
-    if (opener && !draft.tabs[tabId]) draft.tabs[tabId] = structuredClone(opener);
-  });
-}
-
 function logError(err: unknown) {
   console.error('[lanehead]', err);
 }
 
 export function installTabListeners(): void {
-  browser.tabs.onCreated.addListener((tab) => {
-    const { id: tabId, openerTabId } = tab;
-    if (tabId === undefined) return;
-    // A tab from the New Tab button (Ctrl/Cmd+T) can carry the active tab as its opener;
-    // only link-opened tabs inherit.
-    const url = tab.pendingUrl || tab.url || '';
-    const fromLink = openerTabId !== undefined && !url.startsWith('chrome://');
-    (fromLink ? inherit(tabId, openerTabId) : Promise.resolve())
-      .then(async () => badgeTab(tabId, await current()))
+  // Chrome clears per-tab badges on every navigation, and new tabs start without one.
+  const rebadge = (tabId: number) => {
+    current()
+      .then((state) => badgeTab(tabId, state))
       .catch(logError);
-  });
+  };
+  browser.tabs.onCreated.addListener((tab) => tab.id !== undefined && rebadge(tab.id));
+  browser.webNavigation.onCommitted.addListener((nav) => nav.frameId === 0 && rebadge(nav.tabId));
 
+  /**
+   * A tab opened by a page (target=_blank link, ⌘/Ctrl-click, `window.open`) gets a copy of its
+   * source tab's state, if `inheritOnOpen`. Best effort: the first request can beat the copy.
+   *
+   * Only `webNavigation.onCreatedNavigationTarget` names the real source. `tabs.onCreated`'s
+   * `openerTabId` is the active tab, even for tabs the page did not open (measured: a CDP-created
+   * blank tab, and a `window.open` from a background tab, both got the wrong opener).
+   */
   browser.webNavigation.onCreatedNavigationTarget.addListener(({ sourceTabId, tabId }) => {
-    inherit(tabId, sourceTabId).catch(logError);
+    current()
+      .then(({ settings, tabs }) => {
+        // Most sources have no state: skip the rules rewrite.
+        if (!settings.inheritOnOpen || !tabs[sourceTabId]) return;
+        return update((draft) => {
+          const source = draft.tabs[sourceTabId];
+          if (source) draft.tabs[tabId] = structuredClone(source);
+        });
+      })
+      .catch(logError);
   });
 
   browser.tabs.onRemoved.addListener((tabId) => {
