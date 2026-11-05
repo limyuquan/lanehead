@@ -3,7 +3,7 @@ import { defineConfig } from 'wxt';
 
 /**
  * Public half of the key that fixes the unpacked extension ID (EXTENSION_ID in src/shared/ids.ts).
- * The private half was discarded; the store assigns its own ID to the zip build.
+ * The private half was discarded; the store assigns its own ID to the `store` build.
  */
 const PUBLIC_KEY =
   'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmwJCtaQVtjLh6UqJHldCHkkGDScS0lQBusCJJFN3e2hp9vVLFjfqSA88JqMM/sNvm34Mlbphvs6XHFvtwq4StUA8Plg0Abid0Z2C1kQSBm4cldYqv7BbG2jKatTWZr0lLwSyX/G9GgWTj77ujbVQvWblGR3b+EJPxjxqVkBWBmffTO+//Ly/n+RS3JHnrtSAeVPc2Ig+HYRYaU/tpKBSJiXkR2jxYaG4KYhMa7mOdZnncyHImzF73aF1j/H5gMR3p8G4fBnoaiVW2aGUlFiwW2MEaM9ibOfhMTV24rMhGfakLkyDmKl5yhZti/7o+ijIdFA1wS1zo7qFdSS8N4hcZwIDAQAB';
@@ -12,7 +12,8 @@ const PUBLIC_KEY =
  * Lanehead build config. The manifest is generated from here.
  *
  * Modes:
- * - `production` (`pnpm build`, `pnpm zip`): store build, no `key`.
+ * - `production` (`pnpm build`, `pnpm zip`): the build people load unpacked, fixed ID via `key`.
+ * - `store` (`pnpm zip:store`): Chrome Web Store upload, no `key` (the store rejects it).
  * - `development` (`pnpm dev`): WXT dev runner, fixed ID via `key`.
  * - `e2e` (`pnpm build:e2e`): outputs to `.output/chrome-mv3-e2e`, fixed ID via `key`.
  */
@@ -31,7 +32,7 @@ export default defineConfig({
     description:
       'Per-tab request headers. Give every tab its own lane; let your coding agent switch them.',
     minimum_chrome_version: '120',
-    ...(mode !== 'production' && { key: PUBLIC_KEY }),
+    ...(mode !== 'store' && { key: PUBLIC_KEY }),
     permissions: [
       'declarativeNetRequest',
       'storage',

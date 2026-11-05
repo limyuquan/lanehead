@@ -17,6 +17,7 @@
     "build": "wxt build",
     "build:e2e": "wxt build --mode e2e",
     "zip": "wxt zip",
+    "zip:store": "wxt zip --mode store",
     "build:cli": "esbuild cli/main.ts --bundle --platform=node --format=esm --target=node22 --loader:.md=text --banner:js='#!/usr/bin/env node' --outfile=dist/lanehead.js && chmod +x dist/lanehead.js",
     "typecheck": "wxt prepare && tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.cli.json",
     "lint": "biome check .",
