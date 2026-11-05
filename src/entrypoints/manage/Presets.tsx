@@ -137,7 +137,7 @@ export function Presets({ data }: { data: Data }) {
         <table className="w-full table-fixed border-collapse text-left">
           <thead className="text-xs text-muted">
             <tr className="border-y border-line">
-              <th className="w-[30%] py-2 pr-4 font-normal">Name</th>
+              <th className="w-[40%] py-2 pr-4 font-normal sm:w-[30%]">Name</th>
               <th className="hidden w-[68px] py-2 pr-4 font-normal sm:table-cell">Badge</th>
               <th className="py-2 pr-4 font-normal">Headers</th>
               <th className="hidden w-[18%] py-2 pr-4 font-normal sm:table-cell">Sends to</th>

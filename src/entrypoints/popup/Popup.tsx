@@ -409,7 +409,10 @@ export function Popup({ initial, standalone }: Props) {
             title={`Agent bridge: ${agentState.label}`}
             onClick={() => openManage('agents')}
           >
-            <span className="dot" style={{ background: agentState.dot }} />
+            {/* Only a live bridge earns a dot: most people never install one. */}
+            {agent === 'connected' && (
+              <span className="dot" style={{ background: agentState.dot }} />
+            )}
             Agents
             <span className="sr-only" data-testid="agent-state">
               {agentState.label}

@@ -13,7 +13,7 @@ export function Name({ text, className = '' }: { text: string; className?: strin
     );
   }
   return (
-    <span title={text} className={`flex min-w-0 ${className}`}>
+    <span title={text} className={`flex min-w-0 overflow-hidden ${className}`}>
       <span className="sr-only">{text}</span>
       <span aria-hidden="true" className="overflow-hidden text-ellipsis whitespace-pre">
         {text.slice(0, -8)}
