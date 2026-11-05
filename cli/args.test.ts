@@ -27,16 +27,7 @@ describe('parse', () => {
   });
 
   it('-H splits on the first colon and validates with the core rules', () => {
-    const cmd = parse([
-      'set',
-      '12',
-      '-H',
-      'x-env:  lane_a ',
-      '-H',
-      'url: http://a:1',
-      '-p',
-      'p',
-    ]);
+    const cmd = parse(['set', '12', '-H', 'X-Env:  lane_a ', '-H', 'url: http://a:1', '-p', 'p']);
     expect(cmd).toMatchObject({
       args: {
         tab: 12,

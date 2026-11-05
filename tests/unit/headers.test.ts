@@ -21,7 +21,7 @@ const code = (fn: () => unknown) => {
 
 describe('validateHeader', () => {
   it('trims both parts and lowercases the name', () => {
-    expect(validateHeader({ name: ' x-env ', value: ' lane_a ' })).toEqual({
+    expect(validateHeader({ name: ' X-Env ', value: ' lane_a ' })).toEqual({
       name: 'x-env',
       value: 'lane_a',
     });
@@ -108,25 +108,25 @@ describe('validateDomains', () => {
 
 describe('validatePreset', () => {
   const input = {
-    name: ' lane_a ',
+    name: ' team_checkout ',
     color: PALETTE[0] as string,
     badge: '',
-    headers: [{ name: 'x-env', value: 'lane_a' }],
+    headers: [{ name: 'X-Env', value: 'team_checkout' }],
     domains: [],
   };
   const other: Preset = { ...input, id: 'p1', name: 'staging' };
 
   it('normalizes name, headers and an empty badge', () => {
     expect(validatePreset(input, [other])).toEqual({
-      name: 'lane_a',
+      name: 'team_checkout',
       color: PALETTE[0],
-      headers: [{ name: 'x-env', value: 'lane_a' }],
+      headers: [{ name: 'x-env', value: 'team_checkout' }],
       domains: [],
     });
   });
 
   it.each([
-    ['a taken name (any case)', { name: 'staging' }],
+    ['a taken name (any case)', { name: 'STAGING' }],
     ['an empty name', { name: ' ' }],
     ['a 41-char name', { name: 'n'.repeat(41) }],
     ['a reserved lane name', { name: 'Off' }],

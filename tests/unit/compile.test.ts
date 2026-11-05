@@ -4,10 +4,10 @@ import type { Preset, TabState } from '@/core/types';
 
 const staging: Preset = {
   id: 'staging',
-  name: 'lane_a',
+  name: 'team_checkout',
   color: '#188038',
   headers: [
-    { name: 'x-env', value: 'lane_a' },
+    { name: 'x-env', value: 'team_checkout' },
     { name: 'x-canary', value: '1' },
   ],
   domains: [],
@@ -29,7 +29,7 @@ describe('compile', () => {
       priority: 1,
       action: {
         type: 'modifyHeaders',
-        requestHeaders: set({ 'x-env': 'lane_a', 'x-canary': '1' }),
+        requestHeaders: set({ 'x-env': 'team_checkout', 'x-canary': '1' }),
       },
     });
     expect(rule?.condition).not.toHaveProperty('excludedTabIds');
@@ -134,13 +134,18 @@ describe('fingerprint', () => {
   it('differs when a value, a header or the domains change', () => {
     expect(lane(own('a'))).not.toBe(lane(own('b')));
     expect(lane(own('a'))).not.toBe(lane(undefined));
-    expect(lane({ preset: 'staging', headers: [] })).not.toBe(lane({ preset: 'scoped', headers: [] }));
+    expect(lane({ preset: 'staging', headers: [] })).not.toBe(
+      lane({ preset: 'scoped', headers: [] }),
+    );
   });
 });
 
 describe('laneOf', () => {
   it('no state: the global preset, or nothing', () => {
-    expect(laneOf(undefined, [staging], 'staging')).toMatchObject({ lane: 'lane_a', global: true });
+    expect(laneOf(undefined, [staging], 'staging')).toMatchObject({
+      lane: 'team_checkout',
+      global: true,
+    });
     expect(laneOf(undefined, [staging], null)).toEqual({ lane: null, global: false, headers: [] });
   });
 
@@ -158,7 +163,7 @@ describe('laneOf', () => {
       [staging],
       null,
     );
-    expect(lane.lane).toBe('lane_a');
+    expect(lane.lane).toBe('team_checkout');
     expect(lane.headers).toEqual([
       { name: 'x-env', value: 'mine' },
       { name: 'x-canary', value: '1' },

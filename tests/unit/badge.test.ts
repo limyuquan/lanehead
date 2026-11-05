@@ -5,8 +5,8 @@ import type { Preset } from '@/core/types';
 
 describe('deriveBadge', () => {
   it.each([
-    ['lane_a', 'claw'], // prefix dropped, first 4
-    ['staging-x1-feature', 'x1fe'], // up to the first separator only
+    ['team_checkout', 'chec'], // prefix dropped, first 4
+    ['stg-x1-feature', 'x1fe'], // up to the first separator only
     ['lane_a', 'lana'], // too little left after the separator: the whole name
     ['lane_b', 'lanb'],
     ['lane_feature_a', 'feaa'], // names that differ only at the end still differ
@@ -24,22 +24,22 @@ describe('deriveBadge', () => {
 describe('badgeOf / titleOf', () => {
   const preset: Preset = {
     id: 'p1',
-    name: 'lane_a',
+    name: 'team_checkout',
     color: '#188038',
-    headers: [{ name: 'x-env', value: 'lane_a' }],
+    headers: [{ name: 'x-env', value: 'team_checkout' }],
     domains: [],
   };
   const lane = (l: Partial<Lane>): Lane => ({ lane: null, global: false, headers: [], ...l });
 
   it('preset: derived badge in its color, or its own badge', () => {
     const l = lane({ lane: preset.name, headers: preset.headers, preset });
-    expect(badgeOf(l)).toEqual({ text: 'claw', color: '#188038' });
-    expect(badgeOf({ ...l, preset: { ...preset, badge: 'staging' } })?.text).toBe('staging');
+    expect(badgeOf(l)).toEqual({ text: 'chec', color: '#188038' });
+    expect(badgeOf({ ...l, preset: { ...preset, badge: 'STG' } })?.text).toBe('STG');
   });
 
   it('global only: 3 chars and a dot', () => {
     const l = lane({ lane: preset.name, global: true, headers: preset.headers, preset });
-    expect(badgeOf(l)).toEqual({ text: 'cla•', color: '#188038' });
+    expect(badgeOf(l)).toEqual({ text: 'che•', color: '#188038' });
   });
 
   it('custom: derived from the first own value, grey', () => {

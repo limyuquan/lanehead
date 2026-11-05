@@ -23,7 +23,7 @@ export const CUSTOM_COLOR = '#5f6368';
  * 3. longer: the first 4, except that a short ending that tells lanes apart (`_a`, `-2`, `v12`)
  *    is kept, so `lane_a` and `lane_b` differ
  *
- * `lane_a` → `claw`, `lane_a` → `lana`, `env12` → `en12`, `dev` → `dev`.
+ * `team_checkout` → `chec`, `lane_a` → `lana`, `env12` → `en12`, `dev` → `dev`.
  */
 export function deriveBadge(text: string): string {
   const alnum = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
