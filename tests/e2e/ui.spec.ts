@@ -43,6 +43,8 @@ test('popup: switch lanes by click and number keys, reload with Enter and R', as
   await popup.keyboard.press('r');
   await requests(lh, 'p', 3);
   expect(await lastEnv(lh, 'p')).toBe('b');
+  // Wait for the page to commit: it records what the page loaded with.
+  await expect(popup.getByRole('button', { name: /Reload tab/ })).toBeHidden();
 
   await popup.keyboard.press('0');
   await expect(lane).toHaveText('No headers');
@@ -58,6 +60,10 @@ test('popup: paste headers, edit and remove them inline, errors shown inline', a
   await lh.api('set', { tab, preset: 'lane_a' });
   const popup = await lh.popup(tab);
   const add = popup.getByLabel('Add headers');
+  const hint = popup.getByText('Enter to add · Shift+Enter for a new line');
+  await expect(hint).toBeHidden();
+  await add.focus();
+  await expect(hint).toBeVisible();
 
   await add.fill('nonsense');
   await add.press('Enter');
@@ -129,6 +135,117 @@ test('popup: save the tab as a preset, and use it for all tabs', async ({ lh }) 
   );
 });
 
+test('popup: own headers on a scoped preset say where they go; save as preset keeps the domains', async ({
+  lh,
+}) => {
+  await lh.api('preset.save', {
+    preset: { ...preset('scoped', 'a'), domains: ['example.com'] },
+  });
+  const page = await lh.open(lh.url('sd'));
+  const tab = await lh.tabId(page);
+  await lh.api('set', { tab, preset: 'scoped', headers: [{ name: 'x-debug', value: '1' }] });
+  const popup = await lh.popup(tab);
+  await expect(popup.getByText('Sent only to example.com, like the preset.')).toBeVisible();
+
+  await popup.getByRole('button', { name: 'Save as preset' }).click();
+  await popup.getByLabel('Preset name').fill('scoped_debug');
+  await popup.getByLabel('Preset name').press('Enter');
+  await expect(popup.getByTestId('lane')).toHaveText('scoped_debug');
+  const saved = (await lh.api('presets', {})).presets.find((p) => p.name === 'scoped_debug');
+  expect(saved?.domains).toEqual(['example.com']);
+});
+
+test('popup: Reload tab shows while the page is out of date, also after reopening', async ({
+  lh,
+}) => {
+  await lh.api('preset.save', { preset: preset('lane_a', 'a') });
+  const page = await lh.open(lh.url('st'));
+  const tab = await lh.tabId(page);
+  let popup = await lh.popup(tab);
+  const reload = () => popup.getByRole('button', { name: /Reload tab/ });
+  await expect(reload()).toBeHidden();
+
+  await popup.getByRole('button', { name: /lane_a/ }).click();
+  await expect(reload()).toBeVisible();
+  await popup.close();
+  popup = await lh.popup(tab);
+  await expect(reload()).toBeVisible();
+
+  await reload().click();
+  await requests(lh, 'st', 2);
+  expect(await lastEnv(lh, 'st')).toBe('a');
+  await expect(reload()).toBeHidden();
+  // A reload from elsewhere (here: the page itself) counts too.
+  await lh.api('set', { tab, headers: [{ name: 'x-debug', value: '1' }] });
+  await expect(reload()).toBeVisible();
+  await page.reload();
+  await expect(reload()).toBeHidden();
+});
+
+test('popup: follows changes made elsewhere and edits only the header it changed', async ({
+  lh,
+}) => {
+  await lh.api('preset.save', { preset: preset('lane_a', 'a') });
+  await lh.api('preset.save', { preset: preset('lane_b', 'b') });
+  const page = await lh.open(lh.url('live'));
+  const tab = await lh.tabId(page);
+  await lh.api('set', { tab, preset: 'lane_a', headers: [{ name: 'x-mine', value: '1' }] });
+  const popup = await lh.popup(tab);
+
+  // An agent changes the tab while the popup is open.
+  await lh.api('set', { tab, preset: 'lane_b', headers: [{ name: 'x-agent', value: '1' }] });
+  await expect(popup.getByTestId('lane')).toHaveText('lane_b');
+  await expect(popup.getByLabel('Value of x-agent')).toHaveValue('1');
+
+  const mine = popup.getByLabel('Value of x-mine');
+  await mine.fill('2');
+  await mine.press('Enter');
+  await expect
+    .poll(async () => (await lh.api('get', { tab })).headers)
+    .toEqual({ 'x-env': 'b', 'x-mine': '2', 'x-agent': '1' });
+
+  // Renaming a header moves its value, and leaves the others alone.
+  await popup.getByRole('textbox', { name: 'Header name' }).first().fill('X-Renamed');
+  await popup.getByRole('textbox', { name: 'Header name' }).first().press('Enter');
+  await expect
+    .poll(async () => (await lh.api('get', { tab })).headers)
+    .toEqual({ 'x-env': 'b', 'x-renamed': '2', 'x-agent': '1' });
+});
+
+test('long names and values never widen the popup or push manage actions away', async ({
+  context,
+  lh,
+}) => {
+  const long = 'lane_backend_feature_login_redirect_12';
+  const wide = 'W'.repeat(40);
+  const value = 'v'.repeat(192);
+  await lh.api('preset.save', { preset: preset(long, value) });
+  await lh.api('preset.save', { preset: preset(wide, 'w') });
+  const page = await lh.open(lh.url('long'));
+  const tab = await lh.tabId(page);
+  await lh.api('set', { tab, preset: wide, headers: [{ name: 'x-long', value }] });
+  const popup = await lh.popup(tab);
+  await popup.setViewportSize({ width: 380, height: 600 });
+  await lh.api('global', { preset: wide });
+
+  await expect(popup.getByText(/for all tabs/)).toBeVisible();
+  expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
+  // Cut in the middle: the end (where lanes differ) stays visible; the full name is the title.
+  const row = popup.getByRole('button', { name: new RegExp(long) });
+  await expect(row.getByTitle(long)).toBeVisible();
+  await expect(row.getByText('irect_12', { exact: true })).toBeVisible();
+  await expect(popup.getByTitle(value).first()).toBeVisible();
+
+  const manage = await context.newPage();
+  await manage.setViewportSize({ width: 1080, height: 720 });
+  await manage.goto(`chrome-extension://${EXTENSION_ID}/manage.html#presets`);
+  const edit = manage.getByRole('button', { name: `Edit ${wide}` });
+  await expect(edit).toBeInViewport();
+  expect(await manage.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+    1080,
+  );
+});
+
 test('popup first run: create a lane and use it in one step', async ({ lh }) => {
   const page = await lh.open(lh.url('f'));
   const tab = await lh.tabId(page);
@@ -155,7 +272,7 @@ test('manage: create, edit, reorder, delete presets; export and import round tri
   await page.getByRole('button', { name: 'New preset' }).click();
   const form = page.getByRole('form', { name: 'New preset' });
   await form.getByLabel('Name').fill('lane_a');
-  await form.getByLabel('Headers').fill('x-env: a\nx-use-canary: 1');
+  await form.getByLabel('Headers').fill('x-env: a\nx-canary: 1');
   await form.getByLabel('Only send to').fill('example.com, Api.Example.org');
   await form.getByRole('radio', { name: 'Green' }).check();
   await form.getByRole('button', { name: 'Create preset' }).click();
@@ -192,7 +309,7 @@ test('manage: create, edit, reorder, delete presets; export and import round tri
       PALETTE[1],
       [
         { name: 'x-env', value: 'a' },
-        { name: 'x-use-canary', value: '1' },
+        { name: 'x-canary', value: '1' },
       ],
       ['example.com', 'api.example.org'],
     ],
@@ -222,6 +339,59 @@ test('manage: create, edit, reorder, delete presets; export and import round tri
   // Importing again updates by name instead of duplicating.
   await page.getByLabel('Import presets file').setInputFiles(file);
   await expect.poll(async () => (await lh.api('presets', {})).presets.length).toBe(2);
+});
+
+test('manage: typing in the badge of a new preset stays in the badge', async ({ context, lh }) => {
+  const page = await context.newPage();
+  await manage(page, 'presets');
+  await page.getByRole('button', { name: 'New preset' }).click();
+  const form = page.getByRole('form', { name: 'New preset' });
+  await expect(form.getByLabel('Name')).toBeFocused();
+  await page.keyboard.type('lane_kb');
+  await form.getByLabel('Badge').click();
+  await page.keyboard.type('TEST');
+  await form.getByRole('radio', { name: 'Teal' }).check();
+  await page.keyboard.type('x');
+  await expect(form.getByLabel('Name')).toHaveValue('lane_kb');
+  await expect(form.getByLabel('Badge')).toHaveValue('TEST');
+  await form.getByLabel('Headers').fill('x-env: kb');
+  await form.getByRole('button', { name: 'Create preset' }).click();
+  await expect
+    .poll(async () => (await lh.api('presets', {})).presets.map((p) => [p.name, p.badge]))
+    .toEqual([['lane_kb', 'TEST']]);
+});
+
+test('manage: a malformed import file shows an error and imports nothing', async ({
+  context,
+  lh,
+}) => {
+  const errors: Error[] = [];
+  const page = await context.newPage();
+  page.on('pageerror', (e) => errors.push(e));
+  await manage(page, 'presets');
+  const input = page.getByLabel('Import presets file');
+  const note = page.getByRole('status');
+  const upload = (json: unknown) =>
+    input.setInputFiles({
+      name: 'presets.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(json)),
+    });
+
+  await upload({ presets: [preset('lane_a', 'a')] });
+  await expect(note).toHaveText('Imported 1 preset.');
+
+  await upload({ presets: [null] });
+  await expect(note).toHaveText('Nothing imported. Entry 1: It is not a preset object.');
+  await upload({ presets: [preset('lane_b', 'b'), { ...preset('lane_c', 'c'), headers: 'x' }] });
+  await expect(note).toHaveText('Nothing imported. "lane_c": Pass headers as a list.');
+  await upload({ presets: [{ ...preset('lane_d', 'd'), color: 7 }] });
+  await expect(note).toContainText('Nothing imported. "lane_d": Pick a color');
+  await upload('nope');
+  await expect(note).toHaveText('Choose a JSON file exported from Lanehead.');
+
+  expect((await lh.api('presets', {})).presets.map((p) => p.name)).toEqual(['lane_a']);
+  expect(errors).toEqual([]);
 });
 
 test('manage: tabs change lane inline and clear', async ({ context, lh }) => {
@@ -268,11 +438,14 @@ test('manage: agents shows the bridge state, instance and an editable label', as
   await page.getByLabel('Label').press('Enter');
   await expect.poll(async () => (await lh.api('status', {})).label).toBe('Work Chrome');
 
-  await manage(page, 'settings');
-  await page.getByLabel(/Agent control/).uncheck();
-  await expect.poll(async () => (await lh.api('settings', {})).agentControl).toBe(false);
-  await manage(page, 'agents');
+  // The state follows the bridge live, here and in the popup (this profile has no host).
+  const web = await lh.open(lh.url('ag'));
+  const popup = await lh.popup(await lh.tabId(web));
+  await lh.api('settings', { patch: { agentControl: false } });
   await expect(page.getByTestId('agent-state')).toHaveText('Off');
+  await expect(popup.getByTestId('agent-state')).toHaveText('Off');
   await page.getByRole('button', { name: 'Turn on' }).click();
-  await expect.poll(async () => (await lh.api('settings', {})).agentControl).toBe(true);
+  await expect(page.getByTestId('agent-state')).toHaveText('Bridge not installed');
+  await expect(popup.getByTestId('agent-state')).toHaveText('Bridge not installed');
+  expect((await lh.api('settings', {})).agentControl).toBe(true);
 });

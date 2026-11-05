@@ -56,7 +56,7 @@ test('global preset: unassigned and new tabs get it; tabs with own state or off 
   expect((await visit(lh, plain, 'plain-after'))?.['x-env']).toBeUndefined();
 });
 
-test('preset domains scope the preset part; own headers go everywhere', async ({ lh }) => {
+test("preset domains scope the preset's headers and the tab's own ones alike", async ({ lh }) => {
   await lh.api('preset.save', {
     preset: preset('scoped', { 'x-env': 'scoped' }, ['localhost']),
   });
@@ -70,7 +70,7 @@ test('preset domains scope the preset part; own headers go everywhere', async ({
 
   const [main] = await lh.log('d');
   expect(main?.['x-env']).toBeUndefined();
-  expect(main?.['x-own']).toBe('1');
+  expect(main?.['x-own']).toBeUndefined();
   expect((await lh.log('d-frame'))[0]).toMatchObject({ 'x-env': 'scoped', 'x-own': '1' });
 });
 
