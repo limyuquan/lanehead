@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <title>Lanehead</title>
+  <!-- Three lanes seen down the road; the tab's own lane is blue. Drawn on the 16 px grid.
+       `pnpm icons` renders public/icon/{16,32,48,128}.png from this file. -->
+  <path d="M0.5 15 L4 2 H5.5 L4.5 15Z" fill="#8e9196"/>
+  <path d="M6 15 L7 2 H9 L10 15Z" fill="#1a73e8"/>
+  <path d="M11.5 15 L10.5 2 H12 L15.5 15Z" fill="#8e9196"/>
+</svg>

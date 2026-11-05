@@ -3,11 +3,37 @@
   "displayName": "Lanehead",
   "description": "Per-tab request headers. Give every tab its own lane; let your coding agent switch them.",
   "version": "0.1.0",
-  "private": true,
+  "author": "Lim Yu Quan",
+  "license": "MIT",
+  "keywords": [
+    "chrome-extension",
+    "request-headers",
+    "http-headers",
+    "declarativenetrequest",
+    "per-tab",
+    "coding-agent",
+    "claude-code",
+    "codex",
+    "cli"
+  ],
+  "homepage": "https://github.com/limyuquan/lanehead#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/limyuquan/lanehead.git"
+  },
+  "bugs": {
+    "url": "https://github.com/limyuquan/lanehead/issues"
+  },
   "type": "module",
   "bin": {
     "lanehead": "dist/lanehead.js"
   },
+  "files": [
+    "dist/lanehead.js",
+    "skill/SKILL.md",
+    "README.md",
+    "LICENSE"
+  ],
   "packageManager": "pnpm@10.0.0",
   "engines": {
     "node": ">=22"
@@ -19,17 +45,15 @@
     "zip": "wxt zip",
     "zip:store": "wxt zip --mode store",
     "build:cli": "esbuild cli/main.ts --bundle --platform=node --format=esm --target=node22 --loader:.md=text --banner:js='#!/usr/bin/env node' --outfile=dist/lanehead.js && chmod +x dist/lanehead.js",
+    "icons": "node scripts/icons.mjs",
     "typecheck": "wxt prepare && tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.cli.json",
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "vitest run",
     "test:e2e": "pnpm build:e2e && pnpm build:cli && playwright test",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
-    "postinstall": "wxt prepare"
-  },
-  "dependencies": {
-    "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "prepare": "wxt prepare",
+    "prepublishOnly": "pnpm build:cli"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.3",
@@ -40,11 +64,12 @@
     "@types/react-dom": "19.3.0",
     "@wxt-dev/module-react": "1.2.2",
     "esbuild": "0.28.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "tailwindcss": "4.3.3",
     "typescript": "7.0.2",
     "vite": "8.3.5",
     "vitest": "5.0.5",
     "wxt": "0.21.4"
-  },
-  "license": "MIT"
+  }
 }

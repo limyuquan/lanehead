@@ -42,8 +42,12 @@ export default defineConfig({
       'nativeMessaging',
     ],
     host_permissions: ['<all_urls>'],
-    // `default_popup` comes from the `popup` entrypoint.
-    action: { default_title: 'Lanehead' },
+    // `default_popup` comes from the `popup` entrypoint. `icons` is discovered from public/icon/
+    // (rendered from assets/icon.svg by `pnpm icons`).
+    action: {
+      default_title: 'Lanehead',
+      default_icon: { 16: 'icon/16.png', 32: 'icon/32.png', 48: 'icon/48.png' },
+    },
     // The manage page is an unlisted WXT page (src/entrypoints/manage), used as the options page.
     options_ui: { page: 'manage.html', open_in_tab: true },
     commands: {
