@@ -18,6 +18,7 @@ import {
   type TabInfo,
   type TabState,
 } from '@/core/types';
+import { agentState } from './native';
 import { current, type State, update } from './store';
 
 /** Runs `op`. Throws a LaneheadError for anything the caller can fix. */
@@ -224,8 +225,7 @@ const handlers: Handlers = {
       label: settings.label,
       version: browser.runtime.getManifest().version,
       browser: `${brand === 'Edg' ? 'Edge' : 'Chrome'} ${major}`,
-      // Phase 3 (src/background/native.ts) reports the bridge state.
-      agent: 'off',
+      agent: agentState(),
     };
   },
 };

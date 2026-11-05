@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 import { dispatch, errorOf } from '@/background/api';
+import { installBridge } from '@/background/native';
 import { installTabListeners, reconcile } from '@/background/tabs';
 import type { Request, Response } from '@/shared/messages';
 
@@ -19,5 +20,6 @@ export default defineBackground(() => {
     return true;
   });
 
-  // Native bridge (phase 3): src/background/native.ts connects to the host and calls `dispatch`.
+  // Native bridge: the `lanehead` CLI's host → dispatch.
+  installBridge();
 });
