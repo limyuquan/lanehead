@@ -1,0 +1,44 @@
+{
+  "name": "lanehead",
+  "displayName": "Lanehead",
+  "description": "Per-tab request headers. Give every tab its own lane; let your coding agent switch them.",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.0.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "build:e2e": "wxt build --mode e2e",
+    "zip": "wxt zip",
+    "typecheck": "wxt prepare && tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "test:e2e": "pnpm build:e2e && playwright test",
+    "check": "pnpm typecheck && pnpm lint && pnpm test",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.3",
+    "@playwright/test": "1.64.1",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@wxt-dev/module-react": "1.2.2",
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vitest": "5.0.5",
+    "wxt": "0.21.4"
+  },
+  "license": "MIT"
+}
