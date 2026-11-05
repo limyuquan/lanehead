@@ -19,17 +19,21 @@ export const CUSTOM_COLOR = '#5f6368';
 /**
  * Short badge text for a name or value:
  * 1. drop everything up to the first `_` or `-` if ≥ 3 letters/digits remain
- * 2. keep letters/digits, lowercased
- * 3. longer than 4: first 3 + last 1, so names that differ at the end (`lane_a`, `lane_b`) differ
+ * 2. keep letters/digits, lowercased; ≤ 4 chars → done
+ * 3. longer: the first 4, except that a short ending that tells lanes apart (`_a`, `-2`, `v12`)
+ *    is kept, so `lane_a` and `lane_b` differ
  *
- * `lane_a` → `clad`, `lane_a` → `lana`, `lane_b` → `lanb`, `dev` → `dev`.
+ * `lane_a` → `claw`, `lane_a` → `lana`, `env12` → `en12`, `dev` → `dev`.
  */
 export function deriveBadge(text: string): string {
   const alnum = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
   const cut = text.search(/[_-]/);
-  const rest = alnum(cut >= 0 ? text.slice(cut + 1) : '');
-  const s = rest.length >= 3 ? rest : alnum(text);
-  return s.length > 4 ? s.slice(0, 3) + s.slice(-1) : s;
+  const base = cut >= 0 && alnum(text.slice(cut + 1)).length >= 3 ? text.slice(cut + 1) : text;
+  const s = alnum(base);
+  if (s.length <= 4) return s;
+  const end = base.match(/[_-]([\p{L}\p{N}]{1,2})$|(\p{N}{1,2})$/u);
+  const tail = end ? alnum(end[1] ?? end[2]) : '';
+  return s.slice(0, 4 - tail.length) + tail;
 }
 
 /**

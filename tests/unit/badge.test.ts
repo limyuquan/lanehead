@@ -5,13 +5,15 @@ import type { Preset } from '@/core/types';
 
 describe('deriveBadge', () => {
   it.each([
-    ['lane_a', 'clad'], // prefix dropped, first 3 + last 1
+    ['lane_a', 'claw'], // prefix dropped, first 4
     ['staging-x1-feature', 'x1fe'], // up to the first separator only
     ['lane_a', 'lana'], // too little left after the separator: the whole name
     ['lane_b', 'lanb'],
     ['lane_feature_a', 'feaa'], // names that differ only at the end still differ
     ['lane_feature_b', 'feab'],
     ['Staging', 'stag'], // no separator
+    ['env12', 'en12'], // trailing digits kept
+    ['feature_checkout', 'chec'],
     ['dev', 'dev'],
     ['ab', 'ab'],
   ])('%s → %s', (text, badge) => {
@@ -31,7 +33,7 @@ describe('badgeOf / titleOf', () => {
 
   it('preset: derived badge in its color, or its own badge', () => {
     const l = lane({ lane: preset.name, headers: preset.headers, preset });
-    expect(badgeOf(l)).toEqual({ text: 'clad', color: '#188038' });
+    expect(badgeOf(l)).toEqual({ text: 'claw', color: '#188038' });
     expect(badgeOf({ ...l, preset: { ...preset, badge: 'staging' } })?.text).toBe('staging');
   });
 
