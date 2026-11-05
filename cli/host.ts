@@ -73,7 +73,8 @@ export function host(): void {
     net.createServer(serve).listen(file, async () => {
       chmodSync(file, 0o600);
       inode = statSync(file).ino;
-      const ui = await startUi(run);
+      // The page is optional: the socket keeps working without it.
+      const ui = await startUi(run).catch((err) => void console.error('[lanehead host] ui', err));
       send({ ready: true, ...(ui && { ui }) });
     });
   }

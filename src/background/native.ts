@@ -51,6 +51,7 @@ async function sync(): Promise<void> {
   if (!settings.agentControl) {
     port?.disconnect();
     port = undefined;
+    ui = undefined;
     setState('off');
     await browser.alarms.clear(ALARM);
     return;

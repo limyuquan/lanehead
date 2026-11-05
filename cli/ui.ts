@@ -25,7 +25,7 @@ export const MAX_BODY = 16 * 1024;
  */
 export async function startUi(run: Run): Promise<string | undefined> {
   const first = Number(process.env.LANEHEAD_PORT) || FIRST_PORT;
-  for (let port = first; port < first + PORTS; port++) {
+  for (let port = first; port < Math.min(first + PORTS, 65536); port++) {
     const server = http.createServer((req, res) => {
       handle(req, res, port, run).catch((err) => {
         console.error('[lanehead host] ui', err);

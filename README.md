@@ -69,15 +69,16 @@ Chrome 120+ and other Chromium browsers (Edge, Brave).
 Once, on the machine where the browser runs (macOS or Linux):
 
 ```sh
-npx lanehead install          # registers the bridge with Chrome; or --browser chromium|edge|brave|cft
+npm i -g lanehead             # the `lanehead` command
+lanehead install              # registers the bridge with Chrome; or --browser chromium|edge|brave|cft
 lanehead skill --install      # teaches Claude Code and Codex the commands (skill/SKILL.md)
 lanehead status               # shows the connected browsers
 ```
 
-`npx lanehead` works once the package is on npm. Until then, from a clone:
+`npm i -g lanehead` works once the package is on npm. Until then, from a clone:
 
 ```sh
-pnpm build:cli && node dist/lanehead.js install
+pnpm build:cli && node dist/lanehead.js install   # then use `lanehead` from ~/.local/bin
 ```
 
 `install` copies the bridge to `~/.lanehead/` and puts `lanehead` in `~/.local/bin` when that's on

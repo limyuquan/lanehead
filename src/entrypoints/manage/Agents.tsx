@@ -5,7 +5,7 @@ import { REPO_URL } from '@/shared/ids';
 import { call } from '@/shared/messages';
 import { type Data, SectionHead } from './Manage';
 
-const INSTALL = 'npx lanehead install';
+const INSTALL = 'npm i -g lanehead && lanehead install';
 
 export function Agents({ data }: { data: Data }) {
   const { status, settings } = data;

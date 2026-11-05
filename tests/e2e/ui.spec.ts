@@ -432,7 +432,7 @@ test('manage: agents shows the bridge state, instance and an editable label', as
       off: 'Off',
     }[agent],
   );
-  await expect(page.getByText('npx lanehead install')).toBeVisible();
+  await expect(page.getByText('npm i -g lanehead && lanehead install')).toBeVisible();
 
   await page.getByLabel('Label').fill('Work Chrome');
   await page.getByLabel('Label').press('Enter');
