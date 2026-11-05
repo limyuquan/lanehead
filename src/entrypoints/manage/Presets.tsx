@@ -1,10 +1,11 @@
 /** Presets: create, edit, delete, reorder, import and export. */
 import { type FormEvent, useRef, useState } from 'react';
 import { deriveBadge, PALETTE } from '@/core/badge';
-import { parseHeaderLines } from '@/core/headers';
+import { parseHeaderLines, validatePreset } from '@/core/headers';
 import type { Preset } from '@/core/types';
 import { call } from '@/shared/messages';
-import { laneStyle, nextColor } from '@/shared/ui';
+import { Name } from '@/shared/Name';
+import { focusOnMount, laneStyle, nextColor } from '@/shared/ui';
 import { type Data, SectionHead } from './Manage';
 
 /** Names of PALETTE's colors, same order. */
@@ -33,19 +34,37 @@ export function Presets({ data }: { data: Data }) {
     URL.revokeObjectURL(a.href);
   };
 
-  // A preset whose name exists already updates it; the rest are added.
+  // A preset whose name exists already updates it; the rest are added. Every entry is checked
+  // first, so a bad file imports nothing.
   const importFile = async (f: File) => {
-    let list: Preset[];
+    setNote(null);
+    let list: unknown[];
     try {
       const json = JSON.parse(await f.text());
-      list = Array.isArray(json) ? json : json.presets;
+      list = Array.isArray(json) ? json : json?.presets;
       if (!Array.isArray(list)) throw new Error();
     } catch {
       setNote({ text: 'Choose a JSON file exported from Lanehead.', error: true });
       return;
     }
+    const checked: Omit<Preset, 'id'>[] = [];
+    for (const [i, entry] of list.entries()) {
+      try {
+        if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+          throw new Error('It is not a preset object.');
+        }
+        const p = entry as Partial<Preset>;
+        const others = checked.map((c) => ({ ...c, id: '' }));
+        checked.push(validatePreset({ ...p, domains: p.domains ?? [] } as Preset, others));
+      } catch (err) {
+        const name = (entry as Partial<Preset> | null)?.name;
+        const which = typeof name === 'string' && name ? `"${name}"` : `Entry ${i + 1}`;
+        setNote({ text: `Nothing imported. ${which}: ${(err as Error).message}`, error: true });
+        return;
+      }
+    }
     let known = presets;
-    for (const { id: _, ...p } of list) {
+    for (const p of checked) {
       const same = known.find((k) => k.name.toLowerCase() === String(p.name).trim().toLowerCase());
       try {
         const saved = await call('preset.save', {
@@ -58,7 +77,9 @@ export function Presets({ data }: { data: Data }) {
         return;
       }
     }
-    setNote({ text: `Imported ${list.length === 1 ? '1 preset' : `${list.length} presets`}.` });
+    setNote({
+      text: `Imported ${checked.length === 1 ? '1 preset' : `${checked.length} presets`}.`,
+    });
   };
 
   const editor = (preset?: Preset) => (
@@ -113,14 +134,14 @@ export function Presets({ data }: { data: Data }) {
 
       {editing === 'new' && <div className="border-t border-line">{editor()}</div>}
       {presets.length ? (
-        <table className="w-full border-collapse text-left">
+        <table className="w-full table-fixed border-collapse text-left">
           <thead className="text-xs text-muted">
             <tr className="border-y border-line">
-              <th className="py-2 pr-4 font-normal">Name</th>
-              <th className="py-2 pr-4 font-normal">Badge</th>
+              <th className="w-[30%] py-2 pr-4 font-normal">Name</th>
+              <th className="hidden w-[68px] py-2 pr-4 font-normal sm:table-cell">Badge</th>
               <th className="py-2 pr-4 font-normal">Headers</th>
-              <th className="py-2 pr-4 font-normal">Sends to</th>
-              <th className="py-2 font-normal">
+              <th className="hidden w-[18%] py-2 pr-4 font-normal sm:table-cell">Sends to</th>
+              <th className="w-[124px] py-2 font-normal">
                 <span className="sr-only">Actions</span>
               </th>
             </tr>
@@ -140,11 +161,13 @@ export function Presets({ data }: { data: Data }) {
                   <td className="py-3 pr-4">
                     <span className="flex items-center gap-2.5">
                       <span className="dot" />
-                      <span className="font-medium">{p.name}</span>
-                      {p.id === global && <span className="text-xs text-muted">all tabs</span>}
+                      <Name text={p.name} className="font-medium" />
+                      {p.id === global && (
+                        <span className="shrink-0 text-xs text-muted">all tabs</span>
+                      )}
                     </span>
                   </td>
-                  <td className="py-3 pr-4">
+                  <td className="hidden py-3 pr-4 sm:table-cell">
                     <span className="badge">{p.badge ?? deriveBadge(p.name)}</span>
                   </td>
                   <td className="py-3 pr-4 font-mono text-xs leading-6">
@@ -154,7 +177,7 @@ export function Presets({ data }: { data: Data }) {
                       </div>
                     ))}
                   </td>
-                  <td className="py-3 pr-4 text-muted">
+                  <td className="hidden py-3 pr-4 break-words text-muted sm:table-cell">
                     {p.domains.length ? p.domains.join(', ') : 'all sites'}
                   </td>
                   <td className="py-2 text-right whitespace-nowrap">
@@ -269,9 +292,7 @@ function Editor({ preset, color: initialColor, isGlobal, onDone }: EditorProps) 
           value={name}
           onChange={(e) => setName(e.currentTarget.value)}
           placeholder="feature_login"
-          ref={(el) => {
-            if (!preset) el?.focus();
-          }}
+          ref={preset ? undefined : focusOnMount}
         />
       </div>
       <div className={row}>
@@ -365,8 +386,13 @@ function Editor({ preset, color: initialColor, isGlobal, onDone }: EditorProps) 
             {confirming ? (
               <>
                 <span className="text-muted">Tabs in this lane lose its headers.</span>
-                <button type="button" className="btn text-danger" onClick={remove}>
-                  Delete {preset.name}
+                <button
+                  type="button"
+                  className="btn text-danger"
+                  aria-label={`Delete ${preset.name}`}
+                  onClick={remove}
+                >
+                  Delete
                 </button>
                 <button
                   type="button"

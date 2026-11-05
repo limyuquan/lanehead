@@ -5,6 +5,7 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { type Browser, browser } from 'wxt/browser';
 import type { Preset, Settings, Status, TabInfo } from '@/core/types';
+import { readAgent } from '@/shared/agent';
 import { Checkbox } from '@/shared/Checkbox';
 import { call } from '@/shared/messages';
 import { Agents } from './Agents';
@@ -21,10 +22,11 @@ export type Data = {
 };
 
 async function load(): Promise<Data> {
-  const [{ presets, global }, settings, status, { tabs }, chromeTabs] = await Promise.all([
+  const [{ presets, global }, settings, status, agent, { tabs }, chromeTabs] = await Promise.all([
     call('presets', {}),
     call('settings', {}),
     call('status', {}),
+    readAgent(),
     call('tabs', {}),
     browser.tabs.query({}),
   ]);
@@ -36,7 +38,13 @@ async function load(): Promise<Data> {
     const info = t.id !== undefined && byId.get(t.id);
     if (info) windows.set(t.windowId, [...(windows.get(t.windowId) ?? []), info]);
   }
-  return { presets, global, settings, status, windows: [...windows.values()] };
+  return {
+    presets,
+    global,
+    settings,
+    status: { ...status, agent },
+    windows: [...windows.values()],
+  };
 }
 
 const SECTIONS = [

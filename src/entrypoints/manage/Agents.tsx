@@ -1,38 +1,15 @@
 /** Agents: the native bridge's state, how to install it, and this browser's name for agents. */
 import { useState } from 'react';
-import type { AgentState } from '@/core/types';
+import { AGENT_STATES } from '@/shared/agent';
 import { REPO_URL } from '@/shared/ids';
 import { call } from '@/shared/messages';
 import { type Data, SectionHead } from './Manage';
 
 const INSTALL = 'npx lanehead install';
 
-const STATES: Record<AgentState, { label: string; about: string; dot: string }> = {
-  connected: {
-    label: 'Connected',
-    about: 'Agents on this computer can use the lanehead CLI now.',
-    dot: '#188038',
-  },
-  connecting: {
-    label: 'Connecting…',
-    about: 'Waiting for the bridge to answer.',
-    dot: '#b06000',
-  },
-  'no-host': {
-    label: 'Bridge not installed',
-    about: 'Run the install command below. Lanehead retries every 30 seconds.',
-    dot: '#c5221f',
-  },
-  off: {
-    label: 'Off',
-    about: 'Agent control is turned off.',
-    dot: 'var(--color-faint)',
-  },
-};
-
 export function Agents({ data }: { data: Data }) {
   const { status, settings } = data;
-  const state = STATES[status.agent];
+  const state = AGENT_STATES[status.agent];
   const [label, setLabel] = useState(settings.label);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');

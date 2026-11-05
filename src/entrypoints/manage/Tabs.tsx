@@ -7,19 +7,14 @@ import { hostOf, laneStyle } from '@/shared/ui';
 import { type Data, SectionHead } from './Manage';
 
 export function Tabs({ data }: { data: Data }) {
-  const { presets, global, windows, settings } = data;
+  const { presets, global, windows } = data;
   const globalPreset = presets.find((p) => p.id === global);
-  // Tabs changed here since their last reload.
-  const [changed, setChanged] = useState<number[]>([]);
   const [error, setError] = useState<{ tab: number; message: string } | null>(null);
 
-  const run = async (tab: number, work: Promise<unknown>, reloads = false) => {
+  const run = async (tab: number, work: Promise<unknown>) => {
     try {
       await work;
       setError(null);
-      setChanged((ids) =>
-        reloads || settings.reloadOnChange ? ids.filter((id) => id !== tab) : [...ids, tab],
-      );
     } catch (err) {
       setError({ tab, message: (err as Error).message });
     }
@@ -117,7 +112,7 @@ export function Tabs({ data }: { data: Data }) {
                     >
                       {headers.length ? (
                         headers.map(([name, value]) => (
-                          <div key={name} className="truncate">
+                          <div key={name} className="truncate" title={`${name}: ${value}`}>
                             <span className="text-muted">{name}:</span> {value}
                           </div>
                         ))
@@ -126,11 +121,11 @@ export function Tabs({ data }: { data: Data }) {
                       )}
                     </td>
                     <td className="w-[150px] py-2 text-right whitespace-nowrap">
-                      {changed.includes(tab.id) && (
+                      {tab.stale && (
                         <button
                           type="button"
                           className="btn btn-primary"
-                          onClick={() => run(tab.id, call('reload', { tab: tab.id }), true)}
+                          onClick={() => run(tab.id, call('reload', { tab: tab.id }))}
                         >
                           Reload
                         </button>
