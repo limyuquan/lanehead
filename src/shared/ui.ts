@@ -36,3 +36,9 @@ export function nextColor(presets: Preset[]): string {
   const free = PALETTE.find((c) => !presets.some((p) => p.color === c));
   return free ?? (PALETTE[presets.length % PALETTE.length] as string);
 }
+
+/**
+ * Ref callback that focuses its element when it mounts. Keep it module-level: an inline callback
+ * is a new function each render, so React would call it (and steal focus) on every keystroke.
+ */
+export const focusOnMount = (el: HTMLElement | null) => el?.focus();

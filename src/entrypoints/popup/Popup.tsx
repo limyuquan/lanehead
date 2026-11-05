@@ -6,27 +6,31 @@ import {
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
+  useCallback,
   useEffect,
   useRef,
   useState,
 } from 'react';
+import { type Browser, browser } from 'wxt/browser';
 import { CUSTOM_COLOR } from '@/core/badge';
-import { parseHeaderLines } from '@/core/headers';
-import type { Header, Preset, Settings, TabInfo } from '@/core/types';
+import { parseHeaderLines, validateHeader } from '@/core/headers';
+import type { AgentState, Header, Preset, TabInfo } from '@/core/types';
+import { AGENT_STATES, readAgent } from '@/shared/agent';
 import { Checkbox } from '@/shared/Checkbox';
 import { call } from '@/shared/messages';
-import { hostOf, laneStyle, nextColor, openManage } from '@/shared/ui';
+import { Name } from '@/shared/Name';
+import { focusOnMount, hostOf, laneStyle, nextColor, openManage } from '@/shared/ui';
 
-export type View = { tab: TabInfo; presets: Preset[]; global: string | null; settings: Settings };
+export type View = { tab: TabInfo; presets: Preset[]; global: string | null; agent: AgentState };
 
 /** Everything the popup shows, read in parallel. */
 export async function loadView(tab: number): Promise<View> {
-  const [info, { presets, global }, settings] = await Promise.all([
+  const [info, { presets, global }, agent] = await Promise.all([
     call('get', { tab }),
     call('presets', {}),
-    call('settings', {}),
+    readAgent(),
   ]);
-  return { tab: info, presets, global, settings };
+  return { tab: info, presets, global, agent };
 }
 
 type Props = {
@@ -37,27 +41,44 @@ type Props = {
 
 export function Popup({ initial, standalone }: Props) {
   const [view, setView] = useState(initial);
-  // The headers the page was loaded with; anything else means a reload is due.
-  const [applied, setApplied] = useState(() => JSON.stringify(initial.tab.headers));
   const [error, setError] = useState<{ at: string; message: string } | null>(null);
   const [savingAs, setSavingAs] = useState(false);
   const reloadButton = useRef<HTMLButtonElement>(null);
   const focusReload = useRef(false);
 
-  const { tab, presets, global } = view;
+  const { tab, presets, global, agent } = view;
   const preset = presets.find((p) => p.name === tab.lane);
   const globalPreset = presets.find((p) => p.id === global);
   const own: Header[] = tab.own.map((name) => ({ name, value: tab.headers[name] ?? '' }));
-  const dirty = JSON.stringify(tab.headers) !== applied;
+
+  // Re-read on every change from anywhere (an agent, the manage page, a navigation), so the popup
+  // never acts on an old picture. Only the latest of overlapping reads is shown.
+  const latest = useRef(0);
+  const tabId = initial.tab.id;
+  const refresh = useCallback(async () => {
+    const n = ++latest.current;
+    const next = await loadView(tabId);
+    if (n === latest.current) setView(next);
+  }, [tabId]);
+
+  useEffect(() => {
+    const onChange = () =>
+      refresh().catch((err: Error) => setError({ at: 'lane', message: err.message }));
+    const onTab = (id: number, info: Browser.tabs.OnUpdatedInfo) =>
+      id === tabId && (info.url || info.title) && onChange();
+    browser.storage.onChanged.addListener(onChange);
+    browser.tabs.onUpdated.addListener(onTab);
+    return () => {
+      browser.storage.onChanged.removeListener(onChange);
+      browser.tabs.onUpdated.removeListener(onTab);
+    };
+  }, [refresh, tabId]);
 
   /** Runs a change and re-reads the view. On failure shows the error at `at` and returns false. */
   const act = async (at: string, work: () => Promise<unknown>): Promise<boolean> => {
     try {
       await work();
-      const next = await loadView(tab.id);
-      setView(next);
-      // The service worker already reloaded the tab.
-      if (next.settings.reloadOnChange) setApplied(JSON.stringify(next.tab.headers));
+      await refresh();
       setError(null);
       return true;
     } catch (err) {
@@ -85,13 +106,12 @@ export function Popup({ initial, standalone }: Props) {
       setError({ at: 'lane', message: (err as Error).message });
       return;
     }
-    setApplied(JSON.stringify(tab.headers));
     if (!standalone) window.close();
   };
 
   // After a lane switch, Enter reloads.
   useEffect(() => {
-    if (focusReload.current && dirty) reloadButton.current?.focus();
+    if (focusReload.current && tab.stale) reloadButton.current?.focus();
     focusReload.current = false;
   });
 
@@ -103,7 +123,7 @@ export function Popup({ initial, standalone }: Props) {
       if (picked) void choose(picked);
       else if (e.key === '0' && presets.length) void choose('off');
       else if (
-        dirty &&
+        tab.stale &&
         (e.key.toLowerCase() === 'r' || (e.key === 'Enter' && target === document.body))
       )
         void reload();
@@ -114,8 +134,13 @@ export function Popup({ initial, standalone }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  const setOwn = (headers: Header[], at: string) =>
-    act(at, () => call('set', { tab: tab.id, headers, replace: true }));
+  // Send only the edited header (merged by name): never the whole list, which may be out of date.
+  const editOwn = (old: Header, next: Header, at: string) =>
+    act(at, async () => {
+      const h = validateHeader(next);
+      await call('set', { tab: tab.id, headers: [h] });
+      if (h.name !== old.name) await call('clear', { tab: tab.id, names: [old.name] });
+    });
 
   // A tab on the all-tabs preset keeps it when it gets headers of its own (it would lose it).
   const addHeaders = (text: string) =>
@@ -134,7 +159,8 @@ export function Popup({ initial, standalone }: Props) {
           name,
           color: nextColor(presets),
           headers: Object.entries(tab.headers).map(([n, value]) => ({ name: n, value })),
-          domains: [],
+          // Never broader than what the tab sent.
+          domains: preset?.domains ?? [],
         },
       });
       await call('set', { tab: tab.id, preset: saved.id, headers: [], replace: true });
@@ -160,6 +186,7 @@ export function Popup({ initial, standalone }: Props) {
   const allTabs = preset ?? globalPreset;
   const http = /^https?:/.test(tab.url);
   const canOpen = http && !tab.global && (preset || own.length > 0);
+  const agentState = AGENT_STATES[agent];
 
   return (
     <main className="w-[380px] text-[13px] leading-5">
@@ -170,14 +197,14 @@ export function Popup({ initial, standalone }: Props) {
       <header className="flex items-start justify-between gap-3 px-4 pt-3.5 pb-3">
         <div className="min-w-0">
           <h1
-            className="truncate text-[19px] font-semibold leading-7 tracking-[-0.01em]"
+            className="flex text-[19px] font-semibold leading-7 tracking-[-0.01em]"
             data-testid="lane"
           >
             <LaneTitle tab={tab} preset={preset} />
           </h1>
           <p className="truncate font-mono text-[11px] text-muted">{hostOf(tab.url)}</p>
         </div>
-        {dirty && (
+        {tab.stale && (
           <button
             ref={reloadButton}
             type="button"
@@ -249,8 +276,9 @@ export function Popup({ initial, standalone }: Props) {
             <div style={laneStyle(preset.color)} className="pb-1.5">
               <p className="flex items-center gap-1.5 pb-0.5 text-[11px] text-muted">
                 <span className="dot" />
-                from {preset.name}
-                {tab.global && ' (all tabs)'}
+                <span className="shrink-0">from</span>
+                <Name text={preset.name} />
+                {tab.global && <span className="shrink-0">(all tabs)</span>}
               </p>
               <dl className="grid grid-cols-[minmax(0,40%)_minmax(0,1fr)] font-mono text-xs">
                 {preset.headers.map((h) => {
@@ -258,11 +286,13 @@ export function Popup({ initial, standalone }: Props) {
                   return (
                     <div key={h.name} className="contents">
                       <dt
+                        title={h.name}
                         className={`truncate px-[7px] py-[3px] ${overridden ? 'text-faint line-through' : 'text-muted'}`}
                       >
                         {h.name}
                       </dt>
                       <dd
+                        title={h.value}
                         className={`truncate px-[7px] py-[3px] ${overridden ? 'text-faint line-through' : ''}`}
                       >
                         {h.value}
@@ -281,12 +311,7 @@ export function Popup({ initial, standalone }: Props) {
                   <li key={`${h.name}=${h.value}`}>
                     <OwnRow
                       header={h}
-                      onCommit={(next) =>
-                        setOwn(
-                          own.map((o, j) => (j === i ? next : o)),
-                          `own-${i}`,
-                        )
-                      }
+                      onCommit={(next) => editOwn(h, next, `own-${i}`)}
                       onDelete={() =>
                         act(`own-${i}`, () => call('clear', { tab: tab.id, names: [h.name] }))
                       }
@@ -295,6 +320,11 @@ export function Popup({ initial, standalone }: Props) {
                   </li>
                 ))}
               </ul>
+              {preset && preset.domains.length > 0 && (
+                <p className="px-[7px] pt-0.5 text-[11px] break-words text-muted">
+                  Sent only to {preset.domains.join(', ')}, like the preset.
+                </p>
+              )}
             </div>
           )}
           {tab.lane === 'off' && (
@@ -302,7 +332,7 @@ export function Popup({ initial, standalone }: Props) {
               This tab sends no headers{global && ', not even the all-tabs ones'}.
             </p>
           )}
-          <AddHeaders onAdd={addHeaders} onEmptyEnter={dirty ? reload : undefined} />
+          <AddHeaders onAdd={addHeaders} onEmptyEnter={tab.stale ? reload : undefined} />
           {errorAt('add')}
         </section>
       )}
@@ -318,8 +348,10 @@ export function Popup({ initial, standalone }: Props) {
                     act('lane', () => call('global', { preset: on ? allTabs.id : null }))
                   }
                 />
-                <span>
-                  Use <span className="lane-text font-medium">{allTabs.name}</span> for all tabs
+                <span className="flex min-w-0 gap-[0.3em]">
+                  <span className="shrink-0">Use</span>
+                  <Name text={allTabs.name} className="lane-text font-medium" />
+                  <span className="shrink-0">for all tabs</span>
                 </span>
               </label>
               {global === allTabs.id && (
@@ -371,6 +403,18 @@ export function Popup({ initial, standalone }: Props) {
           <button type="button" className="link" onClick={() => openManage('tabs')}>
             All tabs
           </button>
+          <button
+            type="button"
+            className="link flex items-center gap-1.5"
+            title={`Agent bridge: ${agentState.label}`}
+            onClick={() => openManage('agents')}
+          >
+            <span className="dot" style={{ background: agentState.dot }} />
+            Agents
+            <span className="sr-only" data-testid="agent-state">
+              {agentState.label}
+            </span>
+          </button>
         </nav>
         {presets.length > 0 && (
           <span className="text-faint">
@@ -393,10 +437,10 @@ function LaneTitle({ tab, preset }: { tab: TabInfo; preset: Preset | undefined }
   if (preset) {
     return (
       <>
-        {tab.global && <span className="font-normal text-muted">All tabs: </span>}
-        <span className="lane-text" style={laneStyle(preset.color)}>
-          {preset.name}
-        </span>
+        {tab.global && (
+          <span className="shrink-0 font-normal whitespace-pre text-muted">All tabs: </span>
+        )}
+        <Name text={preset.name} className="lane-text" />
       </>
     );
   }
@@ -425,8 +469,10 @@ function LaneRow({ kbd, color, hollow, name, summary, current, onClick }: LaneRo
     >
       <kbd>{kbd}</kbd>
       <span className={`dot ${hollow ? 'hollow' : ''}`} />
-      <span className={`truncate ${current ? 'font-semibold' : ''}`}>{name}</span>
-      <span className="max-w-[170px] truncate font-mono text-[11px] text-muted">{summary}</span>
+      <Name text={name} className={current ? 'font-semibold' : ''} />
+      <span title={summary} className="max-w-[140px] truncate font-mono text-[11px] text-muted">
+        {summary}
+      </span>
       <span aria-hidden="true" className="lane-text text-xs">
         {current ? '✓' : ''}
       </span>
@@ -462,6 +508,7 @@ function OwnRow({
         aria-label="Header name"
         className="field"
         value={name}
+        title={name}
         onChange={(e) => setName(e.currentTarget.value)}
         onBlur={commit}
         onKeyDown={keys}
@@ -471,6 +518,7 @@ function OwnRow({
         aria-label={`Value of ${header.name}`}
         className="field"
         value={value}
+        title={value}
         onChange={(e) => setValue(e.currentTarget.value)}
         onBlur={commit}
         onKeyDown={keys}
@@ -504,16 +552,25 @@ function AddHeaders({
     else if (await onAdd(text)) setText('');
   };
   return (
-    <textarea
-      aria-label="Add headers"
-      className="field mt-0.5 block w-full resize-none font-mono text-xs"
-      rows={Math.min(6, text.split('\n').length)}
-      placeholder="+ name: value  (paste several lines)"
-      value={text}
-      onChange={(e) => setText(e.currentTarget.value)}
-      onKeyDown={submit}
-      spellCheck={false}
-    />
+    <div>
+      <textarea
+        aria-label="Add headers"
+        aria-describedby="add-hint"
+        className="peer field mt-0.5 block w-full resize-none font-mono text-xs"
+        rows={Math.min(6, text.split('\n').length)}
+        placeholder="+ name: value  (paste several lines)"
+        value={text}
+        onChange={(e) => setText(e.currentTarget.value)}
+        onKeyDown={submit}
+        spellCheck={false}
+      />
+      <p
+        id="add-hint"
+        className={`px-[7px] pt-0.5 text-[11px] text-faint ${text ? '' : 'hidden peer-focus:block'}`}
+      >
+        <kbd>Enter</kbd> to add · <kbd>Shift+Enter</kbd> for a new line
+      </p>
+    </div>
   );
 }
 
@@ -538,7 +595,7 @@ function SaveAs({
           aria-label="Preset name"
           placeholder="Preset name"
           className="input flex-1"
-          ref={(el) => el?.focus()}
+          ref={focusOnMount}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
               e.preventDefault();
