@@ -67,6 +67,8 @@ export type Status = {
   version: string;
   browser: string;
   agent: AgentState;
+  /** The control page for browser-only agents (served by the host), while connected. */
+  ui?: string;
 };
 
 /** Every API operation: `[args, result]`. */

@@ -71,10 +71,29 @@ export function Agents({ data }: { data: Data }) {
             </div>
             <p className="pt-1 text-muted">
               Run once in a terminal. It registers a small bridge (native messaging host) for this
-              browser; nothing listens on the network.
+              browser; it listens only on this computer.
             </p>
           </dd>
         </div>
+        {status.ui && (
+          <div className={row}>
+            <dt className="text-muted">Control page</dt>
+            <dd>
+              <a
+                className="link font-mono text-[13px]"
+                href={status.ui}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {status.ui}
+              </a>
+              <p className="pt-1 text-muted">
+                For agents with browser tools but no shell, like Claude in Chrome: they open this
+                page to set a tab's headers.
+              </p>
+            </dd>
+          </div>
+        )}
         <div className={row}>
           <dt className="text-muted">Instance</dt>
           <dd>

@@ -20,7 +20,7 @@ import {
   type TabInfo,
   type TabState,
 } from '@/core/types';
-import { agentState, syncBridge } from './native';
+import { agentState, agentUi, syncBridge } from './native';
 import { brand, current, markLoaded, type State, sends, update } from './store';
 
 /** Runs `op`. Throws a LaneheadError for anything the caller can fix. */
@@ -214,12 +214,14 @@ const handlers: Handlers = {
   async status() {
     const { instanceId, settings } = await current();
     const [, major = '?'] = /Chrome\/(\d+)/.exec(navigator.userAgent) ?? [];
+    const ui = agentUi();
     return {
       instance: instanceId,
       label: settings.label,
       version: browser.runtime.getManifest().version,
       browser: `${brand()} ${major}`,
       agent: agentState(),
+      ...(ui && { ui }),
     };
   },
 };

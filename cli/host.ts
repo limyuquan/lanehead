@@ -1,7 +1,8 @@
 /**
  * The native host, started by the browser through the wrapper `lanehead install` writes. It
  * listens on `<home>/run/<instance>.sock` and forwards each CLI request line to the browser and
- * the reply back. stdout carries native frames only; diagnostics go to stderr.
+ * the reply back, and serves the control page for browser-only agents (cli/ui.ts). stdout
+ * carries native frames only; diagnostics go to stderr.
  * See docs/CONTRACTS.md section 5.
  */
 import { chmodSync, rmSync, statSync } from 'node:fs';
@@ -10,6 +11,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { decoder, encode } from './frames';
 import { runDir } from './home';
+import { startUi } from './ui';
 
 /** Chrome drops the port on a host → browser message over 1 MB. */
 const MAX_LINE = 1 << 20;
@@ -22,6 +24,20 @@ export function host(): void {
   let nextId = 1;
   let socketPath: string | undefined;
   let inode: number | undefined;
+
+  /** Runs an op in the browser. Ids are the host's own: several clients may reuse theirs. */
+  const call = (op: string, args?: object) =>
+    new Promise<Reply>((resolve) => {
+      const id = nextId++;
+      waiting.set(id, resolve);
+      send({ id, op, args });
+    });
+  /** The same, for the control page: resolves with the result, rejects with `{code, message}`. */
+  const run = async (op: string, args: object) => {
+    const { ok, result, error } = await call(op, args);
+    if (!ok) throw error;
+    return result;
+  };
 
   const decode = decoder();
   process.stdin.on('data', (chunk: Buffer) => {
@@ -54,10 +70,11 @@ export function host(): void {
     socketPath = file;
     // Left by a killed host, or by the one this replaces, which is exiting: the newest wins.
     rmSync(file, { force: true });
-    net.createServer(serve).listen(file, () => {
+    net.createServer(serve).listen(file, async () => {
       chmodSync(file, 0o600);
       inode = statSync(file).ino;
-      send({ ready: true });
+      const ui = await startUi(run);
+      send({ ready: true, ...(ui && { ui }) });
     });
   }
 
@@ -74,10 +91,9 @@ export function host(): void {
         answer(null, { ok: false, error: { code: 'BAD_REQUEST', message } });
         return;
       }
-      // Ids are the host's own: several CLIs may use the same ones at once.
-      const id = nextId++;
-      waiting.set(id, ({ ok, result, error }) => answer(req.id, { ok, result, error }));
-      send({ id, op: req.op, args: req.args });
+      void call(req.op, req.args).then(({ ok, result, error }) =>
+        answer(req.id, { ok, result, error }),
+      );
     });
   }
 }

@@ -5,10 +5,12 @@
  * Each test gets a scratch LANEHEAD_HOME (also its HOME, so the CLI never sees the real
  * ~/.local/bin or ~/.claude) and scratch user-data-dirs, which `install --user-data-dir` registers
  * the host in. Chromium reads `<user-data-dir>/NativeMessagingHosts` (checked on macOS, v156).
- * The browser gets no LANEHEAD_HOME: the installed wrapper carries it.
+ * The browser gets no LANEHEAD_HOME: the installed wrapper carries it. It gets LANEHEAD_PORT, so
+ * each worker's hosts serve their control pages on ports of their own.
  */
 import { execFile } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import http from 'node:http';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -39,7 +41,7 @@ interface Agent {
 
 const test = base.extend<{ agent: Agent }>({
   // biome-ignore lint/correctness/noEmptyPattern: Playwright needs a destructuring pattern.
-  agent: async ({}, use) => {
+  agent: async ({}, use, testInfo) => {
     // Short: a socket path must fit in 104 bytes.
     const home = mkdtempSync(path.join(os.tmpdir(), 'lh-'));
     const env = { ...process.env, LANEHEAD_HOME: home, HOME: home };
@@ -62,6 +64,7 @@ const test = base.extend<{ agent: Agent }>({
         const context = await chromium.launchPersistentContext(dir, {
           channel: 'chromium',
           headless: true,
+          env: { ...process.env, LANEHEAD_PORT: String(47900 + testInfo.parallelIndex * 8) },
           args: [
             `--disable-extensions-except=${EXTENSION_PATH}`,
             `--load-extension=${EXTENSION_PATH}`,
@@ -98,6 +101,7 @@ test('install waits for the browser; status and tabs', async ({ agent, lh }) => 
     label: 'Chromium',
     browser: expect.stringMatching(/^Chromium \d+$/),
     version: '0.1.0',
+    ui: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+\/$/),
   };
   expect(agent.install).toEqual({
     code: 0,
@@ -379,4 +383,127 @@ test('agent control off and on; no host after uninstall', async ({ agent, lh }) 
     instances: [],
     hint: expect.stringContaining('lanehead install'),
   });
+});
+
+test('control page: a browser-only agent switches a tab with the forms', async ({
+  agent,
+  lh,
+  context,
+}) => {
+  const [{ ui }] = await waitForInstances(agent, 1);
+  expect(await lh.api('status', {})).toMatchObject({ ui });
+  await lh.api('preset.save', {
+    preset: {
+      name: 'staging',
+      color: PALETTE[0] as string,
+      headers: [{ name: 'x-env', value: 'staging' }],
+      domains: [],
+    },
+  });
+  const target = await lh.open(lh.url('u0'));
+  const tab = await lh.tabId(target);
+
+  // The full list leaves out the control page and Lanehead's own pages.
+  const control = await context.newPage();
+  await control.goto(ui);
+  await expect(
+    control.getByRole('region', { name: `Tab ${tab} · ${await target.title()}` }),
+  ).toBeVisible();
+  await expect(control.getByRole('region', { name: /· Lanehead$/ })).toHaveCount(0);
+
+  // ?tab=<id>: only that tab, as an agent would open it from tabs_context_mcp.
+  await control.goto(`${ui}?tab=${tab}`);
+  await expect(control.getByRole('heading', { level: 2 })).toHaveText([
+    `Tab ${tab} · ${await target.title()}`,
+    'Open new tab',
+  ]);
+  // Named "Tab <id> · <title>"; the title changes as the tab navigates.
+  const section = control.getByRole('region', { name: new RegExp(`^Tab ${tab} · `) });
+  const status = control.getByRole('status');
+  await section.getByLabel('Headers').fill('X-Env: lane_ui\nx-extra: 1');
+  await section.getByRole('button', { name: 'Set headers' }).click();
+  await expect(status).toHaveText(
+    `Tab ${tab} → custom: x-env=lane_ui, x-extra=1 (reload to apply)`,
+  );
+  expect(new URL(control.url()).searchParams.get('tab')).toBe(String(tab));
+  // The form now shows the tab's own headers.
+  await expect(section.getByLabel('Headers')).toHaveValue('x-env: lane_ui\nx-extra: 1');
+
+  await section.getByRole('button', { name: 'Reload' }).click();
+  await expect(status).toHaveText(`Reloaded tab ${tab} → custom: x-env=lane_ui, x-extra=1`);
+  expect((await lh.log('u0')).at(-1)).toMatchObject({ 'x-env': 'lane_ui', 'x-extra': '1' });
+
+  // Set makes the tab exactly what the form shows: the preset, no own headers.
+  await section.getByLabel('Headers').fill('');
+  await section.getByLabel('Preset').selectOption('staging');
+  await section.getByRole('button', { name: 'Set headers' }).click();
+  await expect(status).toHaveText(`Tab ${tab} → staging: x-env=staging (reload to apply)`);
+  await target.goto(lh.url('u1'));
+  expect((await lh.log('u1'))[0]).toMatchObject({ 'x-env': 'staging' });
+  expect((await lh.log('u1'))[0]?.['x-extra']).toBeUndefined();
+
+  // Errors land in the same status line; nothing changes.
+  await section.getByLabel('Headers').fill('x-env=lane_b');
+  await section.getByRole('button', { name: 'Set headers' }).click();
+  await expect(status).toHaveText('Error: Write "x-env=lane_b" as name: value.');
+  expect(await lh.api('get', { tab })).toMatchObject({ lane: 'staging' });
+
+  await section.getByRole('button', { name: 'Clear' }).click();
+  await expect(status).toHaveText(`Tab ${tab} → no headers (reload to apply)`);
+
+  // Open: the new tab's very first request has the headers.
+  const open = control.getByRole('region', { name: 'Open new tab' });
+  await open.getByLabel('URL').fill(lh.url('u2'));
+  await open.getByLabel('Headers').fill('x-env: opened');
+  await open.getByRole('button', { name: 'Open new tab' }).click();
+  await expect(status).toHaveText(/^Opened tab \d+ → custom: x-env=opened$/);
+  await expect.poll(async () => (await lh.log('u2')).length).toBe(1);
+  expect((await lh.log('u2'))[0]).toMatchObject({ 'x-env': 'opened' });
+});
+
+test('control page: other origins cannot post, other host names get nothing', async ({
+  agent,
+  lh,
+}) => {
+  const [{ ui }] = await waitForInstances(agent, 1);
+  const tab = await lh.tabId(await lh.open(lh.url('x0')));
+
+  // A page on another origin (the fixture server) submits a form to the control page.
+  const evil = await lh.open(lh.url('x1'));
+  const response = evil.waitForResponse(`${ui}set`);
+  await evil.evaluate(
+    ({ action, tab }) => {
+      const form = Object.assign(document.createElement('form'), { method: 'post', action });
+      for (const [name, value] of Object.entries({ tab, headers: 'x-env: evil' })) {
+        form.append(Object.assign(document.createElement('input'), { name, value }));
+      }
+      document.body.append(form);
+      form.submit();
+    },
+    { action: `${ui}set`, tab: String(tab) },
+  );
+  expect((await response).status()).toBe(403);
+  expect(await lh.api('get', { tab })).toMatchObject({ lane: null, headers: {} });
+
+  // DNS rebinding: the right address under another name.
+  const get = (host: string) =>
+    new Promise<{ status: number | undefined; body: string }>((resolve, reject) => {
+      const { port } = new URL(ui);
+      http
+        .get({ host: '127.0.0.1', port, path: '/', headers: { host } }, (res) => {
+          let body = '';
+          res.on('data', (chunk) => {
+            body += chunk;
+          });
+          res.on('end', () => resolve({ status: res.statusCode, body }));
+        })
+        .on('error', reject);
+    });
+  const { port } = new URL(ui);
+  const rebound = await get(`evil.test:${port}`);
+  expect(rebound.status).toBe(421);
+  expect(rebound.body).not.toContain('Tab ');
+  const ok = await get(`localhost:${port}`);
+  expect(ok.status).toBe(200);
+  expect(ok.body).toContain(`Tab ${tab} `);
 });

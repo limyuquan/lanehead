@@ -13,11 +13,18 @@ import { dispatch, errorOf } from './api';
 import { current } from './store';
 
 const ALARM = 'bridge';
+type HostMessage = { ready?: true; ui?: string; id: number; op: string; args: unknown };
 let port: Browser.runtime.Port | undefined;
 let state: AgentState | undefined;
+/** The host's control page for browser-only agents, while connected. */
+let ui: string | undefined;
 
 export function agentState(): AgentState {
   return state ?? 'off';
+}
+
+export function agentUi(): string | undefined {
+  return ui;
 }
 
 /** Pages follow the state through `storage.session` key `agent`. */
@@ -58,9 +65,10 @@ async function sync(): Promise<void> {
   const p = browser.runtime.connectNative(HOST_NAME);
   port = p;
   const reply = (frame: object) => port === p && p.postMessage({ v: 1, ...frame });
-  p.onMessage.addListener((msg: { ready?: true; id: number; op: string; args: unknown }) => {
-    // The host sends `ready` once its socket listens.
+  p.onMessage.addListener((msg: HostMessage) => {
+    // The host sends `ready` once its socket listens, with its page's URL if it could serve one.
     if (msg.ready) {
+      ui = /^http:\/\/127\.0\.0\.1:\d+\/$/.test(msg.ui ?? '') ? msg.ui : undefined;
       setState('connected');
       return;
     }
@@ -75,6 +83,7 @@ async function sync(): Promise<void> {
     if (port !== p) return;
     const wasConnected = state === 'connected';
     port = undefined;
+    ui = undefined;
     // "Specified native messaging host not found." / "Access to … is forbidden.": run `install`.
     setState(/not found|forbidden/i.test(error) ? 'no-host' : 'connecting');
     // A host that ran fine and died (killed, crashed) is retried now, not at the next alarm.

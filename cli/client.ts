@@ -8,7 +8,7 @@ import { CliError, type Command } from './args';
 import { isOwnPage, nameOf, presetList, tabDetail, tabEntry, tabResult } from './format';
 import { hostScript, runDir } from './home';
 
-export type Instance = Pick<Status, 'instance' | 'label' | 'browser' | 'version'>;
+export type Instance = Pick<Status, 'instance' | 'label' | 'browser' | 'version' | 'ui'>;
 
 /** "<who> connected; <what to do>." */
 export function hint(who = 'No browser is'): string {
@@ -85,8 +85,8 @@ export function request(instance: string, op: string, args: object, timeout = 10
 export async function instances(): Promise<Instance[]> {
   return Promise.all(
     (await live()).map(async (id) => {
-      const { instance, label, browser, version } = (await request(id, 'status', {})) as Status;
-      return { instance, label, browser, version };
+      const { instance, label, browser, version, ui } = (await request(id, 'status', {})) as Status;
+      return { instance, label, browser, version, ...(ui && { ui }) };
     }),
   );
 }
