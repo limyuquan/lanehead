@@ -102,6 +102,8 @@ test('install waits for the browser; status and tabs', async ({ agent, lh }) => 
     browser: expect.stringMatching(/^Chromium \d+$/),
     version: '0.1.0',
     ui: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+\/$/),
+    // Host of the focused window's active tab, to tell browsers apart.
+    active: expect.any(String),
   };
   expect(agent.install).toEqual({
     code: 0,
@@ -242,14 +244,26 @@ test('presets and global', async ({ agent, lh }) => {
     ],
     global: null,
   });
+  expect(await agent.cli('global')).toEqual({ code: 0, out: { global: null } });
   expect(await agent.cli('global', 'LANE_G')).toEqual({ code: 0, out: { global: 'lane_g' } });
+  expect(await agent.cli('global')).toEqual({ code: 0, out: { global: 'lane_g' } });
   expect((await agent.cli('presets')).out.global).toBe('lane_g');
   const page = await lh.open(lh.url('g'));
   expect((await lh.log('g'))[0]).toMatchObject({ 'x-g': 'lane_g' });
-  expect((await agent.cli('get', `${await lh.tabId(page)}`)).out).toMatchObject({
-    lane: 'lane_g',
-    global: true,
+  const tab = `${await lh.tabId(page)}`;
+  expect((await agent.cli('get', tab)).out).toMatchObject({ lane: 'lane_g', global: true });
+  expect((await agent.cli('get', tab)).out.domains).toBeUndefined();
+
+  // A preset with domains: the output says where the headers go.
+  expect((await agent.cli('set', tab, '-p', 'scoped')).out).toMatchObject({
+    lane: 'scoped',
+    headers: { 'x-g': 'scoped' },
+    domains: ['app.test'],
   });
+  expect((await agent.cli('tabs', '--url', page.url())).out.tabs[0]).toMatchObject({
+    domains: ['app.test'],
+  });
+  await agent.cli('clear', tab);
   expect((await agent.cli('global', 'off')).out).toEqual({ global: null });
   await page.goto(lh.url('g2'));
   expect((await lh.log('g2'))[0]?.['x-g']).toBeUndefined();
@@ -275,6 +289,10 @@ test('errors: one JSON line and the exit code', async ({ agent }) => {
   expect(await agent.cli('set', '1', '-H', 'x-env=lane_a')).toEqual({
     code: 2,
     out: { error: { code: 'BAD_HEADER', message: `Write "x-env=lane_a" as -H 'x-env: lane_a'.` } },
+  });
+  expect(await agent.cli('open', 'staging')).toEqual({
+    code: 2,
+    out: { error: { code: 'BAD_URL', message: 'Pass a URL like https://example.com.' } },
   });
   // Usage errors from the browser exit 2 too.
   expect(await agent.cli('open', 'ftp://x')).toMatchObject({
@@ -342,6 +360,10 @@ test('two browsers: tabs lists both, a tab id finds its browser, the rest needs 
 
   const ambiguous = await agent.cli('presets');
   expect(ambiguous).toMatchObject({ code: 2, out: { error: { code: 'AMBIGUOUS_INSTANCE' } } });
+  // Each browser by label and active tab, so the agent can tell them apart.
+  expect(ambiguous.out.error.message).toMatch(
+    new RegExp(`${other} \\(Chromium, active tab: [^)]+\\).*Name them in Lanehead → Agents\\.$`),
+  );
   expect(ambiguous.out.error.instances).toHaveLength(2);
   expect((await agent.cli('presets', '-i', other)).code).toBe(0);
 });
@@ -426,21 +448,34 @@ test('control page: a browser-only agent switches a tab with the forms', async (
     `Tab ${tab} → custom: x-env=lane_ui, x-extra=1 (reload to apply)`,
   );
   expect(new URL(control.url()).searchParams.get('tab')).toBe(String(tab));
-  // The form now shows the tab's own headers.
+  // The form now shows the tab's own headers; above it, one list item per header sent.
   await expect(section.getByLabel('Headers')).toHaveValue('x-env: lane_ui\nx-extra: 1');
+  await expect(section.getByRole('list', { name: 'Sends' }).getByRole('listitem')).toHaveText([
+    'x-env: lane_ui',
+    'x-extra: 1',
+  ]);
 
   await section.getByRole('button', { name: 'Reload' }).click();
   await expect(status).toHaveText(`Reloaded tab ${tab} → custom: x-env=lane_ui, x-extra=1`);
   expect((await lh.log('u0')).at(-1)).toMatchObject({ 'x-env': 'lane_ui', 'x-extra': '1' });
 
-  // Set makes the tab exactly what the form shows: the preset, no own headers.
-  await section.getByLabel('Headers').fill('');
+  // Choosing a preset wins like `set -p`: its x-env replaces the own one; x-extra stays.
   await section.getByLabel('Preset').selectOption('staging');
   await section.getByRole('button', { name: 'Set headers' }).click();
-  await expect(status).toHaveText(`Tab ${tab} → staging: x-env=staging (reload to apply)`);
+  await expect(status).toHaveText(
+    `Tab ${tab} → staging: x-env=staging, x-extra=1 (reload to apply)`,
+  );
   await target.goto(lh.url('u1'));
-  expect((await lh.log('u1'))[0]).toMatchObject({ 'x-env': 'staging' });
-  expect((await lh.log('u1'))[0]?.['x-extra']).toBeUndefined();
+  expect((await lh.log('u1'))[0]).toMatchObject({ 'x-env': 'staging', 'x-extra': '1' });
+  await expect(section.getByLabel('Headers')).toHaveValue('x-extra: 1');
+
+  // Preset unchanged: the box is the exact own-header list.
+  await section.getByLabel('Headers').fill('');
+  await section.getByRole('button', { name: 'Set headers' }).click();
+  await expect(status).toHaveText(`Tab ${tab} → staging: x-env=staging (reload to apply)`);
+  await target.goto(lh.url('u1b'));
+  expect((await lh.log('u1b'))[0]).toMatchObject({ 'x-env': 'staging' });
+  expect((await lh.log('u1b'))[0]?.['x-extra']).toBeUndefined();
 
   // Errors land in the same status line; nothing changes.
   await section.getByLabel('Headers').fill('x-env=lane_b');

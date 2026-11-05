@@ -105,7 +105,7 @@ const handlers: Handlers = {
     try {
       target = new URL(url);
     } catch {
-      throw new LaneheadError('BAD_URL', 'Pass a full URL like https://example.com.');
+      throw new LaneheadError('BAD_URL', 'Pass a URL like https://example.com.');
     }
     if (target.protocol !== 'http:' && target.protocol !== 'https:') {
       throw new LaneheadError('BAD_URL', 'Open an http or https URL.');
@@ -195,6 +195,8 @@ const handlers: Handlers = {
   },
 
   async global({ preset }) {
+    // No preset: just read it.
+    if (preset === undefined) return { global: (await current()).global };
     const { global } = await mutate((draft) => {
       draft.global = preset === null ? null : findPreset(draft.presets, preset).id;
     });
@@ -215,6 +217,8 @@ const handlers: Handlers = {
     const { instanceId, settings } = await current();
     const [, major = '?'] = /Chrome\/(\d+)/.exec(navigator.userAgent) ?? [];
     const ui = agentUi();
+    const [focused] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+    const active = focused && hostOf(focused.pendingUrl || focused.url || '');
     return {
       instance: instanceId,
       label: settings.label,
@@ -222,9 +226,19 @@ const handlers: Handlers = {
       browser: `${brand()} ${major}`,
       agent: agentState(),
       ...(ui && { ui }),
+      ...(active && { active }),
     };
   },
 };
+
+/** `example.com:8080` from a URL; the URL itself when it has no host (about:blank). */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host || url;
+  } catch {
+    return url;
+  }
+}
 
 type Tab = Browser.tabs.Tab & { id: number };
 
@@ -313,6 +327,7 @@ function info(tab: Browser.tabs.Tab, state: State): TabInfo {
     global: lane.global,
     headers: Object.fromEntries(lane.headers.map((h) => [h.name, h.value])),
     own: state.tabs[id]?.headers.map((h) => h.name) ?? [],
+    ...(lane.headers.length && lane.preset?.domains.length && { domains: lane.preset.domains }),
     ...(isStale(tab, state) && { stale: true }),
   };
 }

@@ -22,6 +22,7 @@ describe('parse', () => {
     });
     expect(parse(['global', 'off'])).toMatchObject({ args: { preset: null } });
     expect(parse(['global', 'lane_a'])).toMatchObject({ args: { preset: 'lane_a' } });
+    expect(parse(['global'])).toMatchObject({ op: 'global', args: {} });
     expect(parse(['clear', '7', 'a', 'b'])).toMatchObject({ args: { tab: 7, names: ['a', 'b'] } });
     expect(parse(['clear', '7'])).toMatchObject({ args: { tab: 7, names: undefined } });
   });
@@ -128,5 +129,25 @@ describe('withScheme', () => {
     ['ftp://x', 'ftp://x'],
   ])('%s → %s', (url, expected) => {
     expect(withScheme(url)).toBe(expected);
+  });
+
+  it.each([
+    'hello world',
+    'exa<mple.com',
+    'foo|bar.com',
+    'staging',
+    'devbox:3000',
+    'https://foo bar',
+    '',
+  ])('rejects %j', (url) => {
+    expect(() => withScheme(url)).toThrow('Pass a URL like https://example.com.');
+  });
+
+  it('open: BAD_URL is a usage error', () => {
+    expect(fails(['open', 'staging'])).toMatchObject({
+      code: 'BAD_URL',
+      message: 'Pass a URL like https://example.com.',
+      exit: 2,
+    });
   });
 });

@@ -16,12 +16,12 @@ lanehead set <tab> -p <preset>               # a saved preset (`lanehead presets
 lanehead set <tab> --no-preset               # drop the preset, keep own headers
 lanehead set <tab> --off                     # nothing, not even an all-tabs preset
 lanehead open <url> [-H 'name: value'] [-p <preset>]   # new tab; first request has them
-lanehead clear <tab> [<name>...]             # drop all (or the named) own headers
+lanehead clear <tab> [<name>...] [--reload]  # drop all (or the named) own headers
 lanehead reload <tab>
+lanehead global [<preset>|off]               # preset for every tab without its own headers
 ```
 
-- `headers` in any output is exactly what the tab sends. They go to every site, unless the
-  tab's preset has `domains`: then only there.
+- `headers` is exactly what the tab sends — to every site, or only to `domains` when present.
 - `set` merges by name. `-p` replaces the tab's headers of the same names (the preset wins);
   `-H` in the same call still wins over the preset. `--replace`: only what this call gives.
 - Changes apply from the next request. `"stale":true` = the page loaded with other headers:
@@ -33,7 +33,8 @@ With Claude in Chrome:
 2. `lanehead set <tabId> -H 'x-env: lane_a'`, and wait for it to return.
 3. `navigate` that tab. Never navigate before `set` returns.
 
-Errors print `{"error":{"code","message"}}`. Do what the message says.
+Errors print `{"error":{"code","message"}}`.
+- Exit 2: fix the command as the message shows.
+- Exit 1 (NO_TAB, NO_PRESET, NOT_OWN): do what the message says. NO_TAB: run `lanehead tabs` again.
 - Exit 3 (NOT_CONNECTED): tell the user the message; do not retry in a loop.
-- Exit 2: fix the command as the message shows. NO_TAB: run `lanehead tabs` again.
 - Several browsers: `tabs` marks each tab with `"i"`; pass `-i <i>` when asked to.

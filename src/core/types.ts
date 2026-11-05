@@ -54,6 +54,8 @@ export type TabInfo = {
   headers: Record<string, string>;
   /** Names of the tab's own headers (the ones `clear` can remove by name). */
   own: string[];
+  /** The only sites `headers` go to (the preset's domains); absent = every site. */
+  domains?: string[];
   /** The tab would send other headers than its current page loaded with: reload to apply. */
   stale?: true;
 };
@@ -69,6 +71,8 @@ export type Status = {
   agent: AgentState;
   /** The control page for browser-only agents (served by the host), while connected. */
   ui?: string;
+  /** Host of the focused window's active tab, to tell browsers apart. */
+  active?: string;
 };
 
 /** Every API operation: `[args, result]`. */
@@ -93,7 +97,7 @@ export type Ops = {
   'preset.save': [{ preset: Omit<Preset, 'id'> & { id?: string } }, Preset];
   'preset.delete': [{ id: string }, Record<string, never>];
   'preset.order': [{ ids: string[] }, { presets: Preset[] }];
-  global: [{ preset: string | null }, { global: string | null }];
+  global: [{ preset?: string | null }, { global: string | null }];
   settings: [{ patch?: Partial<Settings> }, Settings];
   status: [Record<string, never>, Status];
 };

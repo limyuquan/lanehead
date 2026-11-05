@@ -63,7 +63,7 @@ const SPECS: Record<string, [usage: string, options: string[], min: number, max:
     1,
   ],
   presets: ['presets', [], 0, 0],
-  global: ['global <preset|off>', [], 1, 1],
+  global: ['global [<preset>|off]', [], 0, 1],
   status: ['status', [], 0, 0],
   install: [
     `install [--browser ${BROWSERS.join('|')}] [--user-data-dir <dir>] [--extension-id <id>]`,
@@ -96,13 +96,23 @@ function parseHeaders(values: string[]): Header[] {
 }
 
 /**
- * A URL with a scheme is kept; without one, localhost, 127.* and [::1] get http://, anything
- * else https://.
+ * A URL to open. One with a scheme is kept; without one, localhost, 127.* and [::1] get http://,
+ * anything else https://. Throws BAD_URL for what cannot be a URL: a host with spaces or invalid
+ * characters, or a bare word (no scheme, no dot, not localhost).
  */
-export function withScheme(url: string): string {
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) return url;
-  const local = /^(localhost|127\.[\d.]+|\[::1\])([:/?#]|$)/i.test(url);
-  return `${local ? 'http' : 'https'}://${url}`;
+export function withScheme(input: string): string {
+  const bad = () => new LaneheadError('BAD_URL', 'Pass a URL like https://example.com.');
+  const explicit = /^[a-z][a-z0-9+.-]*:\/\//i.test(input);
+  const local = /^(localhost|127\.[\d.]+|\[::1\])([:/?#]|$)/i.test(input);
+  const url = explicit ? input : `${local ? 'http' : 'https'}://${input}`;
+  let host: string;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    throw bad();
+  }
+  if (!explicit && !local && !host.includes('.')) throw bad();
+  return url;
 }
 
 export function parse(argv: string[]): Command {
@@ -171,16 +181,20 @@ export function parse(argv: string[]): Command {
       });
     case 'reload':
       return op('reload', { tab: tab() });
-    case 'open':
-      return op(
-        'open',
-        { url: withScheme(first), headers, preset: v.preset, focus: v.focus },
-        30_000,
-      );
+    case 'open': {
+      let url: string;
+      try {
+        url = withScheme(first);
+      } catch (err) {
+        throw new CliError('BAD_URL', (err as Error).message, 2);
+      }
+      return op('open', { url, headers, preset: v.preset, focus: v.focus }, 30_000);
+    }
     case 'presets':
       return op('presets', {});
     case 'global':
-      return op('global', { preset: first === 'off' ? null : first });
+      // No argument: just print the current one.
+      return op('global', rest.length ? { preset: first === 'off' ? null : first } : {});
     case 'install': {
       const browser = (v.browser ?? 'chrome') as BrowserName;
       if (!BROWSERS.includes(browser)) throw fail(`Unknown browser "${browser}"`);

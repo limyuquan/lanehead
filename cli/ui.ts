@@ -71,16 +71,22 @@ type Action = 'set' | 'clear' | 'reload' | 'open';
 const ACTIONS: Action[] = ['set', 'clear', 'reload', 'open'];
 
 /**
- * A submitted form → the op's args. `set` makes the tab exactly what the form shows (its
- * headers, and the chosen preset or none). Throws a LaneheadError for bad headers or no URL.
+ * A submitted form → the op's args. `set` makes the tab what the form shows: the Headers box is
+ * its exact own-header list, with the chosen preset (or none). Choosing another preset wins like
+ * `lanehead set -p`: box lines the preset also sets are dropped (`current` is the preset the
+ * form was rendered with). Throws a LaneheadError for bad headers or a bad URL.
  */
-export function formArgs(action: Action, form: URLSearchParams): object {
+export function formArgs(action: Action, form: URLSearchParams, presets: Preset[] = []): object {
   const tab = Number(form.get('tab'));
   const headers = () => parseHeaderLines(form.get('headers') ?? '');
   const preset = form.get('preset') || null;
   switch (action) {
-    case 'set':
-      return { tab, headers: headers(), preset, replace: true };
+    case 'set': {
+      const changed = preset !== (form.get('current') || null);
+      const chosen = changed && presets.find((p) => p.name.toLowerCase() === preset?.toLowerCase());
+      const wins = new Set(chosen ? chosen.headers.map((h) => h.name) : []);
+      return { tab, headers: headers().filter((h) => !wins.has(h.name)), preset, replace: true };
+    }
     case 'clear':
     case 'reload':
       return { tab };
@@ -163,7 +169,10 @@ async function handle(
 
   let id: string;
   try {
-    const tab = (await run(action, formArgs(action, new URLSearchParams(body)))) as TabInfo;
+    const presets =
+      action === 'set' ? ((await run('presets', {})) as { presets: Preset[] }).presets : [];
+    const args = formArgs(action, new URLSearchParams(body), presets);
+    const tab = (await run(action, args)) as TabInfo;
     const prefix = { set: 'Tab', clear: 'Tab', reload: 'Reloaded tab', open: 'Opened tab' };
     id = remember(describeTab(tab, prefix[action]), false);
   } catch (err) {
@@ -225,15 +234,18 @@ async function page(
     const own = t.own.map((n) => `${n}: ${t.headers[n] ?? ''}`).join('\n');
     // The tab's own preset; an all-tabs preset is not the tab's choice.
     const preset = !t.global && presets.find((p) => p.name === t.lane);
+    // One item per header, so agents reading the accessibility tree see each one.
     const sends = Object.entries(t.headers)
-      .map(([n, v]) => `<code>${esc(n)}: ${esc(v)}</code>`)
-      .join(', ');
+      .map(([n, v]) => `<li><code>${esc(n)}: ${esc(v)}</code></li>`)
+      .join('');
     const lane = t.lane === null ? 'no headers' : `${esc(t.lane)}${t.global ? ' (all tabs)' : ''}`;
     return `<section aria-labelledby="t${t.id}">
 <h2 id="t${t.id}">Tab ${t.id} · ${esc(t.title || 'Untitled')}</h2>
-<p class="meta">${esc(hostOf(t.url))} · ${lane}${sends ? ` · ${sends}` : ''}${t.stale ? ' · <strong>reload to apply</strong>' : ''}</p>
+<p class="meta">${esc(hostOf(t.url))} · ${lane}${t.stale ? ' · <strong>reload to apply</strong>' : ''}</p>
+${sends ? `<ul aria-label="Sends">${sends}</ul>` : ''}
 <form method="post" action="/set${query}">
 <input type="hidden" name="tab" value="${t.id}">
+<input type="hidden" name="current" value="${preset ? esc(preset.name) : ''}">
 <label for="h${t.id}">Headers</label>
 <textarea id="h${t.id}" name="headers" rows="2" placeholder="x-env: lane_a">${esc(own)}</textarea>
 <label for="p${t.id}">Preset</label>
@@ -295,6 +307,8 @@ header{border-bottom:1px solid var(--line);padding-bottom:16px}
 section{border-bottom:1px solid var(--line);padding:20px 0}
 p{margin:0}
 .meta{color:var(--muted);overflow-wrap:anywhere}
+ul{margin:8px 0 0;padding:0;list-style:none}
+li{overflow-wrap:anywhere}
 code,textarea{font:13px/1.45 ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace}
 code{color:var(--ink)}
 a{color:var(--muted);text-underline-offset:3px}

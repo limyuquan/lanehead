@@ -5,10 +5,18 @@ import path from 'node:path';
 import readline from 'node:readline';
 import type { Preset, Status, TabInfo } from '../src/core/types';
 import { CliError, type Command } from './args';
-import { isOwnPage, nameOf, presetList, tabDetail, tabEntry, tabResult } from './format';
+import {
+  ambiguousMessage,
+  isOwnPage,
+  nameOf,
+  presetList,
+  tabDetail,
+  tabEntry,
+  tabResult,
+} from './format';
 import { hostScript, runDir } from './home';
 
-export type Instance = Pick<Status, 'instance' | 'label' | 'browser' | 'version' | 'ui'>;
+export type Instance = Pick<Status, 'instance' | 'label' | 'browser' | 'version' | 'ui' | 'active'>;
 
 /** "<who> connected; <what to do>." */
 export function hint(who = 'No browser is'): string {
@@ -85,8 +93,9 @@ export function request(instance: string, op: string, args: object, timeout = 10
 export async function instances(): Promise<Instance[]> {
   return Promise.all(
     (await live()).map(async (id) => {
-      const { instance, label, browser, version, ui } = (await request(id, 'status', {})) as Status;
-      return { instance, label, browser, version, ...(ui && { ui }) };
+      const s = (await request(id, 'status', {})) as Status;
+      const { instance, label, browser, version, ui, active } = s;
+      return { instance, label, browser, version, ...(ui && { ui }), ...(active && { active }) };
     }),
   );
 }
@@ -160,11 +169,15 @@ async function holder(ids: string[], tab: unknown): Promise<string> {
   return ambiguous(found);
 }
 
-/** Throws AMBIGUOUS_INSTANCE listing `ids` with their labels. */
+/** Throws AMBIGUOUS_INSTANCE listing `ids` with their labels and active tabs. */
 async function ambiguous(ids: string[]): Promise<never> {
   const list = (await instances()).filter((i) => ids.includes(i.instance));
-  const message = `Several browsers are connected; pass -i <instance>: ${list.map((i) => `${i.instance} (${i.label})`).join(', ')}.`;
+  const message = ambiguousMessage(list);
   throw new CliError('AMBIGUOUS_INSTANCE', message, 2, {
-    instances: list.map(({ instance, label }) => ({ instance, label })),
+    instances: list.map(({ instance, label, active }) => ({
+      instance,
+      label,
+      ...(active && { active }),
+    })),
   });
 }

@@ -1,6 +1,6 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import type { TabInfo } from '../src/core/types';
+import type { Preset, TabInfo } from '../src/core/types';
 import { allowedHost, allowedOrigin, describeTab, formArgs, MAX_BODY, readBody } from './ui';
 
 describe('allowedHost', () => {
@@ -78,6 +78,54 @@ describe('formArgs', () => {
       preset: 'staging',
       replace: true,
     });
+  });
+
+  it('set: a newly chosen preset wins over the box lines it also sets', () => {
+    const presets: Preset[] = [
+      {
+        id: 'p1',
+        name: 'staging',
+        color: '#000000',
+        headers: [{ name: 'x-env', value: 'staging' }],
+        domains: [],
+      },
+    ];
+    const fields = { tab: '3', headers: 'x-env: lane_a\nx-b: 1', preset: 'staging' };
+    const own = [
+      { name: 'x-env', value: 'lane_a' },
+      { name: 'x-b', value: '1' },
+    ];
+    // Chosen now (the tab had none, or another preset): the preset's x-env wins.
+    expect(formArgs('set', form({ ...fields, current: '' }), presets)).toEqual({
+      tab: 3,
+      headers: [{ name: 'x-b', value: '1' }],
+      preset: 'staging',
+      replace: true,
+    });
+    expect(formArgs('set', form({ ...fields, current: 'lane_a' }), presets)).toMatchObject({
+      headers: [{ name: 'x-b', value: '1' }],
+    });
+    // Unchanged: the box is the exact own-header list.
+    expect(formArgs('set', form({ ...fields, current: 'staging' }), presets)).toEqual({
+      tab: 3,
+      headers: own,
+      preset: 'staging',
+      replace: true,
+    });
+    // None, or a preset that does not exist (set reports it): nothing dropped.
+    expect(formArgs('set', form({ ...fields, preset: '' }), presets)).toMatchObject({
+      headers: own,
+      preset: null,
+    });
+    expect(formArgs('set', form({ ...fields, preset: 'gone' }), presets)).toMatchObject({
+      headers: own,
+    });
+  });
+
+  it('open: a bare word is not a URL', () => {
+    expect(() => formArgs('open', form({ url: 'staging' }))).toThrow(
+      'Pass a URL like https://example.com.',
+    );
   });
 
   it('clear and reload: the tab only', () => {

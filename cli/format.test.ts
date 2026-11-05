@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TabInfo } from '../src/core/types';
-import { isOwnPage, presetList, tabDetail, tabEntry, tabResult } from './format';
+import { ambiguousMessage, isOwnPage, presetList, tabDetail, tabEntry, tabResult } from './format';
 
 const tab: TabInfo = {
   id: 7,
@@ -24,6 +24,12 @@ describe('lean output', () => {
       stale: true,
     });
     expect(tabResult(plain)).toEqual({ id: 8, lane: null, headers: {} });
+    expect(tabResult({ ...tab, domains: ['example.com'] })).toEqual({
+      id: 7,
+      lane: 'staging',
+      headers: { 'x-env': 'staging' },
+      domains: ['example.com'],
+    });
     expect(tabDetail(tab)).toEqual({
       id: 7,
       url: 'https://app.test/',
@@ -84,5 +90,18 @@ describe('lean output', () => {
       global: 'lane_a',
     });
     expect(presetList([], null)).toEqual({ presets: [], global: null });
+  });
+});
+
+describe('ambiguousMessage', () => {
+  it('names each browser by label and active tab, and where to rename them', () => {
+    expect(
+      ambiguousMessage([
+        { instance: 'ab12', label: 'Chrome', active: 'example.com' },
+        { instance: 'cd34', label: 'Chromium' },
+      ]),
+    ).toBe(
+      'Several browsers are connected; pass -i <instance>: ab12 (Chrome, active tab: example.com), cd34 (Chromium). Name them in Lanehead → Agents.',
+    );
   });
 });
