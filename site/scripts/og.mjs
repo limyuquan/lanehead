@@ -18,13 +18,16 @@ try {
     colorScheme: 'dark',
   });
   await page.goto(url, { waitUntil: 'networkidle' });
+  // The headline over the lanes, with the window across them.
   await page.addStyleTag({
-    content: `.top, .hero-sub, .actions, .hero-fine { display: none !important; }
-      .hero { padding-top: 58px !important; }
-      .hero h1 { font-size: 40px !important; }
-      .paint-hero { margin-top: 34px !important; }`,
+    content: `.top, .hero-side { display: none !important; }
+      .hero-head { padding-top: 52px !important; display: block !important; }
+      .hero h1 { font-size: 64px !important; }
+      .hero h1 .nb { display: inline !important; }
+      .road { margin-top: 6px !important; }`,
   });
-  await page.waitForSelector('.paint-hero [data-media-frame][data-ready]');
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForSelector('[data-road] [data-media-frame][data-ready]');
   await page.waitForTimeout(300);
   await page.screenshot({ path: out });
   console.log(out);

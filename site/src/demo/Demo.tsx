@@ -1,9 +1,17 @@
 /**
- * "Try it": a pretend Chrome window with two tabs, Lanehead's real popup (src/entrypoints/popup)
- * for the active tab, what that tab's next request carries, and a terminal running `lanehead`
- * commands. All of it runs on Lanehead's real service worker code inside this page (world.ts).
+ * "Try it": two tabs in two lanes (drawn as the page's lane lines, live), a pretend Chrome window
+ * with those tabs, Lanehead's real popup (src/entrypoints/popup) for the active tab, what that
+ * tab's next request carries, and a terminal running `lanehead` commands. All of it runs on
+ * Lanehead's real service worker code inside this page (world.ts).
  */
-import { type RefObject, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { loadView, Popup, type View } from '@/entrypoints/popup/Popup';
 import { hostOf } from '@/shared/ui';
 import { browser, demo, type FakeTab, MANAGE_EVENT } from './browserShim';
@@ -57,9 +65,7 @@ export function Demo() {
       data-ready={ready || undefined}
       tabIndex={-1}
     >
-      <div className="paint paint-demo">
-        {ready ? <Stage onNote={setNote} /> : <div className="demo-loading" aria-hidden="true" />}
-      </div>
+      {ready ? <Stage onNote={setNote} /> : <div className="demo-loading" aria-hidden="true" />}
       <p className="demo-note" role="status" aria-live="polite">
         {note || 'Runs entirely in this page. Nothing is sent.'}
       </p>
@@ -72,6 +78,7 @@ function Stage({ onNote }: { onNote: (text: string) => void }) {
   if (!active) return null;
   return (
     <div className="stage">
+      <TabLanes tabs={tabs} active={active} />
       <section className="win browser" aria-label="Pretend browser window">
         <TabStrip tabs={tabs} active={active} onNote={onNote} />
         <Toolbar tab={active} />
@@ -87,6 +94,43 @@ function Stage({ onNote }: { onNote: (text: string) => void }) {
       </section>
       <Terminal tabs={tabs.map((t) => t.id)} />
     </div>
+  );
+}
+
+/** A tab's lane, as its badge shows it: name and color, or none when it sends nothing extra. */
+function laneOf(tab: FakeTab): { name: string; color?: string } {
+  const badge = demo.badge(tab.id);
+  const name = /^Lanehead — (.+?):/.exec(badge?.title ?? '')?.[1];
+  return name && badge?.text ? { name, color: badge.color } : { name: 'off' };
+}
+
+const laneStyle = (color?: string) => (color ? ({ '--lane': color } as CSSProperties) : undefined);
+
+/** Each tab on its own lane line, the way the hero draws them. */
+function TabLanes({ tabs, active }: { tabs: FakeTab[]; active: FakeTab }) {
+  return (
+    <ul className="lanes demo-lanes" aria-label="Lanes" data-testid="lanes">
+      {tabs.map((t) => {
+        const lane = laneOf(t);
+        return (
+          <li
+            key={t.id}
+            className={lane.color ? 'lane' : 'lane lane-off'}
+            style={laneStyle(lane.color)}
+            data-active={t.id === active.id || undefined}
+            data-testid={`lane-${t.index}`}
+          >
+            <span className="lane-label">{lane.name}</span>
+            <span className="chip">
+              <i className="chip-fav" aria-hidden="true" />
+              <span className="chip-title">{t.title}</span>
+              <span className="chip-id">tab {t.id}</span>
+            </span>
+            <span className="lane-line" aria-hidden="true" />
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -108,7 +152,12 @@ function TabStrip({
       </span>
       <div className="tabs" role="tablist" aria-label="Tabs">
         {tabs.map((t) => (
-          <div key={t.id} className="tab" data-active={t.id === active.id || undefined}>
+          <div
+            key={t.id}
+            className="tab"
+            style={laneStyle(laneOf(t).color)}
+            data-active={t.id === active.id || undefined}
+          >
             <button
               type="button"
               role="tab"

@@ -1,6 +1,7 @@
 /*
- * Lanehead website. Dark, warm and typographic: small confident type, generous space, the product
- * in plain window frames over a painted landscape. The only strong colors are the lanes' own.
+ * Lanehead website. Cool graphite ink, calm type, the product in plain window frames. The motif is
+ * lanes: thin parallel lines in the extension's lane colors (src/core/badge.ts PALETTE), each named
+ * at its start, with the browser window sitting across them. Those lane colors are the only color.
  *
  * The extension's stylesheet comes first (Tailwind and the popup's classes), so the demo's popup
  * looks exactly like the extension's. Site rules sit in the `components` layer, below the popup's
@@ -11,39 +12,58 @@
 @source "../../src/shared";
 @source "./";
 
+/* Overpass and Overpass Mono (SIL Open Font License 1.1, fonts/OFL.txt): a highway-sign face. */
+@font-face {
+  font-family: "Overpass";
+  src: url("./fonts/overpass.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Overpass Mono";
+  src: url("./fonts/overpass-mono.woff2") format("woff2");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   color-scheme: dark;
-  --bg: #14130f;
-  --bg-2: #1b1a16;
-  --ink: #edebe5;
-  --ink-2: rgb(237 235 229 / 0.62);
-  --ink-3: rgb(237 235 229 / 0.42);
-  --line: rgb(237 235 229 / 0.09);
-  --line-2: rgb(237 235 229 / 0.16);
-  --win: #1a1917;
-  --win-2: #211f1c;
-  --win-3: #121110;
-  --max: 1080px;
+  --bg: #0c0e12;
+  --ink: #e8ecf1;
+  --ink-2: rgb(206 215 228 / 0.62);
+  --ink-3: rgb(206 215 228 / 0.4);
+  --line: rgb(206 215 228 / 0.08);
+  --line-2: rgb(206 215 228 / 0.16);
+  --win: #14171c;
+  --win-2: #1a1e24;
+  --win-3: #0f1115;
+  --off: #6b7280;
+  --max: 1180px;
   --gutter: 16px;
+  --indent: 26px;
   --sans:
     ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", system-ui,
     sans-serif;
-  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --display: "Overpass", var(--sans);
+  --mono: "Overpass Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
   --shadow:
-    0 1px 0 rgb(255 255 255 / 0.04) inset, 0 24px 60px -18px rgb(0 0 0 / 0.65),
-    0 0 0 1px rgb(0 0 0 / 0.35);
+    0 0 0 1px rgb(206 215 228 / 0.07), 0 30px 70px -24px rgb(0 0 0 / 0.8),
+    0 10px 24px -12px rgb(0 0 0 / 0.5);
 
   /* The extension's tokens, for the page around the demo (the popup sets its own below). */
   --color-bg: var(--bg);
   --color-ink: var(--ink);
   --color-muted: var(--ink-2);
   --color-line: var(--line);
-  --color-focus: #f3f1ea;
+  --color-focus: #e8ecf1;
 }
 
 @media (min-width: 720px) {
   :root {
     --gutter: 32px;
+    --indent: 48px;
   }
 }
 
@@ -55,6 +75,10 @@ body {
   font-size: 15px;
   line-height: 1.55;
   text-rendering: optimizeLegibility;
+}
+body {
+  /* The lanes run to the window's edge; never let them scroll the page sideways. */
+  overflow-x: clip;
 }
 html {
   scroll-behavior: smooth;
@@ -108,6 +132,9 @@ html {
   .dim {
     color: var(--ink-3);
   }
+  .nb {
+    white-space: nowrap;
+  }
 
   .skip {
     position: absolute;
@@ -124,9 +151,9 @@ html {
   }
 
   /* Inline code and keys in the page's text (never inside the demo's popup). */
-  :where(.hero-sub, .lede, .facts, .trio, .steps, .agent-line) code {
+  :where(.lede, .facts, .trio, .steps, .agent-line) code {
     font-family: var(--mono);
-    font-size: 0.88em;
+    font-size: 0.86em;
     color: var(--ink);
   }
   :where(.lede, .trio) kbd {
@@ -138,11 +165,23 @@ html {
     border-bottom-width: 2px;
     border-radius: 5px;
     font-family: var(--mono);
-    font-size: 0.78em;
-    line-height: 1.6;
+    font-size: 0.74em;
+    line-height: 1.7;
     text-align: center;
     color: var(--ink);
-    vertical-align: 0.08em;
+    vertical-align: 0.1em;
+  }
+
+  /* A small header-like label over a section: `x-section: agents`. */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    color: var(--lane-c, var(--ink-2));
+  }
+  .eyebrow span {
+    color: var(--ink-3);
   }
 
   /* ---- Buttons ---- */
@@ -150,8 +189,8 @@ html {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    height: 38px;
-    padding: 0 18px;
+    height: 40px;
+    padding: 0 19px;
     border-radius: 999px;
     font-size: 14px;
     font-weight: 500;
@@ -162,7 +201,7 @@ html {
   }
   .pill-sm {
     height: 30px;
-    padding: 0 13px;
+    padding: 0 14px;
     font-size: 13px;
   }
   .pill-light {
@@ -173,11 +212,12 @@ html {
     background: #ffffff;
   }
   .pill-dark {
-    background: #26241f;
+    background: transparent;
     color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--line-2);
   }
   .pill-dark:hover {
-    background: #302d27;
+    background: rgb(206 215 228 / 0.06);
   }
   .actions {
     display: flex;
@@ -190,10 +230,9 @@ html {
     position: sticky;
     top: 0;
     z-index: 20;
-    background: color-mix(in oklab, var(--bg) 94%, transparent);
+    background: color-mix(in oklab, var(--bg) 90%, transparent);
     backdrop-filter: saturate(140%) blur(14px);
     -webkit-backdrop-filter: saturate(140%) blur(14px);
-    border-bottom: 1px solid transparent;
   }
   .top-row {
     display: flex;
@@ -205,9 +244,13 @@ html {
     display: inline-flex;
     align-items: center;
     gap: 9px;
-    font-weight: 600;
-    font-size: 15px;
+    font-family: var(--display);
+    font-weight: 650;
+    font-size: 16px;
     letter-spacing: -0.01em;
+  }
+  .brand span {
+    padding-top: 2px;
   }
   .brand img {
     border-radius: 5px;
@@ -234,68 +277,179 @@ html {
     }
   }
 
+  /* ---- Headings ---- */
+  .hero h1,
+  .lede h2 {
+    font-family: var(--display);
+    color: var(--ink);
+    text-wrap: balance;
+  }
+
   /* ---- Hero ---- */
-  .hero {
-    padding-top: 64px;
+  .hero-head {
+    display: grid;
+    gap: 22px;
+    padding-top: 56px;
   }
   .hero h1 {
-    max-width: 18em;
-    font-size: clamp(27px, 3vw, 34px);
-    font-weight: 500;
-    line-height: 1.15;
-    letter-spacing: -0.022em;
+    font-size: clamp(44px, 7.4vw, 92px);
+    font-weight: 700;
+    line-height: 0.95;
+    letter-spacing: -0.04em;
   }
   .hero-sub {
-    max-width: 35em;
-    margin-top: 14px;
-    font-size: 16.5px;
+    max-width: 30em;
+    font-size: 17px;
     line-height: 1.55;
     color: var(--ink-2);
   }
   .hero .actions {
-    margin-top: 28px;
+    margin-top: 26px;
   }
   .hero-fine {
     margin-top: 16px;
     font-size: 13px;
     color: var(--ink-3);
   }
-  @media (min-width: 720px) {
-    .hero {
-      padding-top: 104px;
+  @media (min-width: 960px) {
+    .hero-head {
+      grid-template-columns: minmax(0, 7fr) minmax(0, 4.4fr);
+      align-items: end;
+      gap: 64px;
+      padding-top: 96px;
+    }
+    .hero-sub {
+      font-size: 16.5px;
     }
   }
 
-  /* ---- Painted backdrops ---- */
-  .paint {
-    position: relative;
-    border-radius: 3px;
-    background-color: #a9ab9b;
-    background-image: url("/art/arques-1200.webp");
-    background-size: cover;
-    background-position: 50% 45%;
-    overflow: hidden;
+  /* ---- Lanes ---- */
+  .lanes {
+    --stroke: 2px;
+    display: grid;
+    margin-right: calc((100% - 100vw) / 2);
   }
-  @media (min-width: 900px), (min-resolution: 2dppx) {
-    .paint {
-      background-image: url("/art/arques-2400.webp");
+  .lane {
+    --lane: var(--off);
+    --lane-c: color-mix(in oklab, var(--lane) 60%, white);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  .lane-label {
+    flex: none;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1;
+    padding-top: 2px;
+    color: var(--lane-c);
+    white-space: nowrap;
+  }
+  .lane-line {
+    position: relative;
+    flex: 1;
+    min-width: 24px;
+    height: var(--stroke);
+    overflow: hidden;
+    background:
+      linear-gradient(color-mix(in oklab, var(--lane-c) 22%, transparent) 0 0) center / 100% 1px
+      no-repeat;
+  }
+  /* Road markings: dashes that drift slowly along the lane. */
+  .lane-line::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 0 -40px;
+    background: repeating-linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--lane-c) 78%, transparent) 0 18px,
+      transparent 18px 40px
+    );
+    animation: lane-drift 4.5s linear infinite;
+  }
+  .lane-off .lane-line::before {
+    background: repeating-linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--lane-c) 70%, transparent) 0 3px,
+      transparent 3px 9px
+    );
+    animation: none;
+  }
+  @keyframes lane-drift {
+    to {
+      transform: translateX(40px);
     }
   }
-  .paint-hero {
+  @media (prefers-reduced-motion: reduce) {
+    .lane-line::before {
+      animation: none;
+    }
+  }
+
+  /* A tab riding its lane. */
+  .chip {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    height: 28px;
+    padding: 0 7px 0 10px;
+    border-radius: 8px;
+    background: var(--win-2);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 6px 16px -8px rgb(0 0 0 / 0.8);
+    font-size: 12px;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .chip-fav {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    background: var(--lane-c);
+  }
+  .chip-badge {
+    padding: 0 4px;
+    border-radius: 3px;
+    background: var(--lane);
+    color: #fff;
+    font: 600 9.5px / 15px var(--sans);
+    letter-spacing: 0.01em;
+  }
+
+  /* The hero's road: four lanes, the browser window across them. */
+  .road {
+    position: relative;
     margin-top: 56px;
-    padding: clamp(18px, 6.5vw, 76px) clamp(14px, 7vw, 92px);
-    aspect-ratio: auto;
-    min-height: 220px;
   }
-  .paint-side {
-    padding: clamp(12px, 3.4vw, 40px);
-    background-position: 18% 80%;
+  .road .lanes {
+    grid-auto-rows: 38px;
+    margin-bottom: 20px;
   }
-  .paint-shift {
-    background-position: 78% 30%;
+  .road .lane-label {
+    min-width: 17ch;
   }
-  .paint-shift-2 {
-    background-position: 40% 92%;
+  .road-win {
+    position: relative;
+    z-index: 1;
+  }
+  @media (min-width: 960px) {
+    .road {
+      margin-top: 40px;
+      padding-block: 48px;
+    }
+    .road .lanes {
+      position: absolute;
+      inset: 48px calc((100% - 100vw) / 2) 48px var(--gutter);
+      grid-auto-rows: 1fr;
+      margin: 0;
+    }
+    .road .road-win {
+      width: 73%;
+      margin-left: auto;
+    }
   }
 
   /* ---- Window frames ---- */
@@ -307,16 +461,20 @@ html {
     overflow: hidden;
   }
   /*
-   * The captured clips (1920×1200) are windows on a near-black margin. The frame crops that margin
-   * (--cx, --cy: its width in clip pixels) so the windows sit on the painting itself.
+   * The captured clips (1920×1200) are windows on a dark margin. The frame crops the margin
+   * (--cx, --cy: its width in clip pixels) down to the window itself, rounded like the window
+   * (--r), so none of the margin shows on the page.
    */
   .media-win {
-    --cx: 0;
-    --cy: 0;
+    --cx: 57;
+    --cy: 48;
+    --r: 16;
     margin: 0;
     aspect-ratio: calc(1920 - 2 * var(--cx)) / calc(1200 - 2 * var(--cy));
-    border-radius: 7px;
-    background: #0d0d0d;
+    border-radius:
+      calc(100% * var(--r) / (1920 - 2 * var(--cx))) /
+      calc(100% * var(--r) / (1200 - 2 * var(--cy)));
+    background: var(--win);
   }
   .media {
     position: absolute;
@@ -333,75 +491,148 @@ html {
   .media-win[data-missing] {
     visibility: hidden;
   }
-  @media (max-width: 719px) {
-    .media-win {
-      border-radius: 4px;
-    }
+  /* The agent clip is two windows side by side: crop the outer margin, cover the gap between. */
+  .media-agent {
+    --cx: 48;
+    background: var(--bg);
+  }
+  .gap-matte {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(100% * (846 - 48) / 1824);
+    width: calc(100% * 29 / 1824);
+    background: var(--bg);
   }
 
   /* ---- Sections ---- */
   .section {
-    padding-top: 96px;
+    padding-top: 112px;
   }
   @media (min-width: 720px) {
     .section {
-      padding-top: 152px;
+      padding-top: 168px;
     }
   }
   .lede {
-    max-width: 30em;
-    font-size: 19px;
-    line-height: 1.42;
-    letter-spacing: -0.012em;
+    max-width: 34em;
+  }
+  .lede .eyebrow {
+    margin-bottom: 18px;
   }
   .lede h2 {
-    font-weight: 500;
-    color: var(--ink);
+    max-width: 16em;
+    font-size: clamp(29px, 3.3vw, 42px);
+    font-weight: 650;
+    line-height: 1.04;
+    letter-spacing: -0.03em;
   }
   .lede p {
+    margin-top: 14px;
+    font-size: 17px;
+    line-height: 1.55;
     color: var(--ink-2);
   }
-  .lede code {
-    font-size: 0.84em;
-  }
-  .hero-sub code {
-    white-space: nowrap;
-  }
   @media (min-width: 720px) {
-    .lede {
-      font-size: 21px;
+    .lede p {
+      font-size: 18px;
     }
-  }
-  @media (min-width: 900px) {
-    .split .lede {
-      font-size: 19px;
-    }
-  }
-  .paint-demo {
-    margin-top: 36px;
   }
 
-  .split {
-    display: grid;
-    gap: 32px;
-    align-items: center;
+  /* ---- Features, along a lane rail ---- */
+  .rail-run {
+    padding-top: 136px;
   }
-  @media (min-width: 900px) {
-    .split {
-      grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+  @media (min-width: 720px) {
+    .rail-run {
+      padding-top: 184px;
+    }
+  }
+  .feat {
+    --lane: var(--off);
+    --lane-c: color-mix(in oklab, var(--lane) 60%, white);
+  }
+  .feat-in {
+    position: relative;
+    padding-left: calc(var(--gutter) + var(--indent));
+    padding-bottom: 120px;
+  }
+  @media (min-width: 720px) {
+    .feat-in {
+      padding-bottom: 168px;
+    }
+  }
+  /* The rail: this section's lane, running down beside it. */
+  .feat-in::before {
+    content: "";
+    position: absolute;
+    left: var(--gutter);
+    top: 6px;
+    bottom: -6px;
+    width: 2px;
+    background: color-mix(in oklab, var(--lane-c) 55%, transparent);
+  }
+  /* Where the lane starts: a marker beside the label. */
+  .feat-in::after {
+    content: "";
+    position: absolute;
+    left: calc(var(--gutter) - 4px);
+    top: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    background: var(--lane-c);
+    box-shadow: 0 0 0 5px var(--bg);
+  }
+  .feat-in > .eyebrow {
+    margin-bottom: 22px;
+  }
+  .feat-details .feat-in {
+    padding-bottom: 8px;
+  }
+  .feat-details .feat-in::before {
+    background: linear-gradient(color-mix(in oklab, var(--lane-c) 55%, transparent), transparent);
+  }
+  .feat-grid {
+    display: grid;
+    gap: 36px;
+  }
+  .feat-switch .feat-grid > .lede {
+    order: -1;
+  }
+  .feat-aside {
+    display: grid;
+    gap: 22px;
+    align-content: start;
+  }
+  .media-agent {
+    margin-top: 48px;
+  }
+  @media (min-width: 960px) {
+    .feat-agents .feat-grid {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 72px;
+    }
+    .media-agent {
+      margin-top: 64px;
+    }
+    .feat-switch .feat-grid {
+      grid-template-columns: minmax(0, 7fr) minmax(0, 4fr);
+      align-items: end;
       gap: 56px;
     }
-    .split-flip {
-      grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
+    .feat-switch .feat-grid > .lede {
+      order: 0;
+      padding-bottom: 8px;
     }
-    .split-flip .split-text {
-      order: 2;
+    .feat-edit .feat-grid {
+      grid-template-columns: minmax(0, 4fr) minmax(0, 6.4fr);
+      align-items: start;
+      gap: 56px;
     }
-  }
-  .split-text {
-    display: grid;
-    gap: 26px;
-    align-content: center;
+    .feat-edit .media-win {
+      margin-top: 72px;
+    }
   }
 
   .code {
@@ -409,15 +640,14 @@ html {
     padding: 14px 16px;
     border-radius: 8px;
     background: var(--win-3);
-    border: 1px solid var(--line);
+    box-shadow: inset 0 0 0 1px var(--line);
     font-family: var(--mono);
     font-size: 12px;
-    line-height: 1.7;
+    line-height: 1.75;
     white-space: pre;
     overflow-x: auto;
     scrollbar-width: thin;
   }
-
   .facts {
     display: grid;
     gap: 14px;
@@ -443,13 +673,13 @@ html {
 
   .trio {
     display: grid;
-    gap: 32px;
-    padding-top: 28px;
-    border-top: 1px solid var(--line);
+    gap: 30px;
   }
   .trio h3 {
-    font-size: 15px;
-    font-weight: 500;
+    font-family: var(--display);
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
   .trio p {
     margin-top: 6px;
@@ -464,28 +694,43 @@ html {
   }
 
   /* ---- Install ---- */
+  .install-grid {
+    display: grid;
+    gap: 40px;
+  }
+  @media (min-width: 960px) {
+    .install-grid {
+      grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+      gap: 72px;
+    }
+  }
   .steps {
     display: grid;
-    gap: 26px;
-    margin-top: 40px;
-    max-width: 640px;
-    counter-reset: step;
+    gap: 0;
+    max-width: 620px;
   }
   .steps li {
     display: grid;
-    grid-template-columns: 28px minmax(0, 1fr);
+    grid-template-columns: 36px minmax(0, 1fr);
     gap: 12px;
+    padding: 18px 0;
+    border-top: 1px solid var(--line);
+  }
+  .steps li:first-child {
+    border-top: 0;
+    padding-top: 4px;
   }
   .step-n {
     font-family: var(--mono);
-    font-size: 13px;
-    line-height: 1.75;
+    font-size: 12px;
+    line-height: 1.9;
     color: var(--ink-3);
   }
   .step-t {
     font-weight: 500;
   }
   .steps p:not(.step-t) {
+    margin-top: 2px;
     color: var(--ink-2);
     font-size: 14.5px;
   }
@@ -505,72 +750,44 @@ html {
     flex-wrap: wrap;
     align-items: baseline;
     gap: 6px 10px;
-    max-width: 760px;
-    margin-top: 40px;
-    padding-top: 22px;
-    border-top: 1px solid var(--line);
+    margin-top: 56px;
     font-size: 14.5px;
   }
   .say {
     padding: 3px 8px;
     border-radius: 6px;
     background: var(--win-3);
-    border: 1px solid var(--line);
+    box-shadow: inset 0 0 0 1px var(--line-2);
   }
   .install .actions {
-    margin-top: 40px;
+    margin-top: 32px;
   }
 
   /* ---- Footer ---- */
   .foot {
-    margin-top: 140px;
-    padding: 28px 0 40px;
+    margin-top: 144px;
+    padding: 26px 0 40px;
     border-top: 1px solid var(--line);
     font-size: 13px;
     color: var(--ink-2);
   }
   .foot-row {
-    display: grid;
-    gap: 10px;
-  }
-  .foot-row p:first-child {
     display: flex;
     gap: 18px;
     align-items: baseline;
   }
   .brand-sm {
     color: var(--ink);
-    font-weight: 600;
+    font-family: var(--display);
+    font-weight: 650;
   }
   .foot a:hover {
     color: var(--ink);
   }
-  .credit {
-    color: var(--ink-3);
-  }
-  .credit a {
-    text-decoration: underline;
-    text-decoration-color: var(--line-2);
-    text-underline-offset: 3px;
-  }
-  @media (min-width: 900px) {
-    .foot-row {
-      grid-template-columns: auto 1fr;
-    }
-    .credit {
-      text-align: right;
-    }
-  }
 
   /* ================= The demo ================= */
-  .paint-demo {
-    padding: 12px;
-    background-position: 50% 62%;
-  }
-  @media (min-width: 720px) {
-    .paint-demo {
-      padding: 44px 40px 40px;
-    }
+  .try #demo-root {
+    margin-top: 48px;
   }
   .demo {
     outline: none;
@@ -579,8 +796,9 @@ html {
     height: 560px;
   }
   .demo-note {
-    margin-top: 14px;
-    font-size: 13px;
+    margin-top: 18px;
+    font-family: var(--mono);
+    font-size: 12px;
     color: var(--ink-3);
   }
   .stage {
@@ -602,6 +820,34 @@ html {
     }
   }
 
+  /* Each pretend tab on its lane line, live: the line takes the tab's lane color. */
+  .demo-lanes {
+    grid-auto-rows: 40px;
+    margin-bottom: 18px;
+  }
+  .demo-lanes .lane {
+    transition: opacity 200ms ease;
+  }
+  .demo-lanes .lane:not([data-active]) {
+    opacity: 0.5;
+  }
+  .demo-lanes .lane-label {
+    min-width: 17ch;
+  }
+  .chip-id {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--ink-2);
+  }
+  @media (max-width: 520px) {
+    .demo-lanes .lane-label {
+      min-width: 15ch;
+    }
+    .demo-lanes .chip-title {
+      display: none;
+    }
+  }
+
   .lights {
     display: inline-flex;
     gap: 6px;
@@ -611,7 +857,7 @@ html {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #3a3833;
+    background: #343a43;
   }
 
   /* Tab strip */
@@ -646,6 +892,21 @@ html {
   .tab[data-active] {
     background: var(--win-2);
     color: var(--ink);
+  }
+  /* The tab rides its lane: a line in its lane's color along its top. */
+  .tab[style]::after {
+    content: "";
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    top: 0;
+    height: 2px;
+    border-radius: 0 0 2px 2px;
+    background: color-mix(in oklab, var(--lane) 60%, white);
+    opacity: 0.55;
+  }
+  .tab[data-active][style]::after {
+    opacity: 1;
   }
   .tab + .tab:not([data-active])::before {
     content: "";
@@ -682,7 +943,7 @@ html {
     width: 12px;
     height: 12px;
     border-radius: 3px;
-    background: linear-gradient(135deg, #c9b48a, #8a7a58);
+    background: linear-gradient(135deg, #b9c3d2, #7d889a);
   }
   .tab-close,
   .tab-new {
@@ -778,8 +1039,8 @@ html {
   /* Body: the pretend site, with the popup hanging from the toolbar */
   .browser-body {
     position: relative;
-    background: #f4f1ea;
-    color: #23211c;
+    background: #f4f5f7;
+    color: #1d2128;
   }
   @media (min-width: 860px) {
     .browser-body {
@@ -840,7 +1101,7 @@ html {
     gap: 16px;
     padding-bottom: 14px;
     margin-bottom: 26px;
-    border-bottom: 1px solid rgb(35 33 28 / 0.12);
+    border-bottom: 1px solid rgb(29 33 40 / 0.12);
   }
   .page-logo {
     font-family: ui-serif, "New York", Georgia, serif;
@@ -853,11 +1114,11 @@ html {
     font-size: 12.5px;
   }
   .page-nav button {
-    color: rgb(35 33 28 / 0.6);
+    color: rgb(29 33 40 / 0.6);
   }
   .page-nav button:hover,
   .page-nav button[aria-current] {
-    color: #23211c;
+    color: #1d2128;
   }
   .page-nav button[aria-current] {
     text-decoration: underline;
@@ -865,7 +1126,7 @@ html {
   }
   .page-kicker {
     font-size: 12px;
-    color: rgb(35 33 28 / 0.55);
+    color: rgb(29 33 40 / 0.55);
   }
   .page-backend {
     margin: 2px 0 20px;
@@ -878,13 +1139,13 @@ html {
     margin-top: 4px;
   }
   .page .hdrs dt {
-    color: rgb(35 33 28 / 0.55);
+    color: rgb(29 33 40 / 0.55);
   }
   .page-link {
     margin-top: 24px;
     font-size: 12.5px;
     text-decoration: underline;
-    text-decoration-color: rgb(35 33 28 / 0.3);
+    text-decoration-color: rgb(29 33 40 / 0.3);
     text-underline-offset: 3px;
   }
   .page-link:hover {
@@ -926,14 +1187,14 @@ html {
   .terminal {
     display: flex;
     flex-direction: column;
-    background: #0f0e0c;
+    background: #0b0d10;
   }
   .term-bar {
     display: flex;
     align-items: center;
     height: 30px;
     padding: 0 8px;
-    background: #191815;
+    background: #161a1f;
   }
   .term-title {
     flex: 1;
@@ -950,7 +1211,7 @@ html {
     font-size: 12px;
     line-height: 1.6;
     scrollbar-width: thin;
-    scrollbar-color: #3a3833 transparent;
+    scrollbar-color: #343a43 transparent;
   }
   .term-entry + .term-entry {
     margin-top: 6px;
@@ -960,7 +1221,7 @@ html {
     word-break: break-all;
   }
   .term-prompt {
-    color: #8fb08a;
+    color: #7fc39a;
   }
   .term-out {
     margin: 0;
@@ -983,7 +1244,7 @@ html {
     background: transparent;
     color: var(--ink);
     font: inherit;
-    caret-color: #8fb08a;
+    caret-color: #7fc39a;
   }
   .term-line input:focus {
     outline: none;

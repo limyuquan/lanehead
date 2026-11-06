@@ -83,11 +83,11 @@ async function start() {
   demo.onRemoved.addListener((tabId) => loads.delete(tabId));
 
   const lanes: Omit<Preset, 'id'>[] = [
-    { name: 'lane_a', color: PALETTE[0] as string, headers: [h('x-env', 'lane_a')], domains: [] },
-    { name: 'lane_b', color: PALETTE[1] as string, headers: [h('x-env', 'lane_b')], domains: [] },
+    lane('feature_checkout', PALETTE[0]),
+    lane('feature_search', PALETTE[4]),
     {
       name: 'staging',
-      color: PALETTE[3] as string,
+      color: PALETTE[1] as string,
       headers: [h('x-env', 'staging'), h('x-canary', '1')],
       domains: [],
     },
@@ -95,10 +95,14 @@ async function start() {
   const saved: Preset[] = [];
   for (const preset of lanes) saved.push((await dispatch('preset.save', { preset })) as Preset);
 
-  const a = await browser.tabs.create({ url: `${SITE}/`, active: true });
-  const b = await browser.tabs.create({ url: `${SITE}/checkout`, active: false });
+  const a = await browser.tabs.create({ url: `${SITE}/checkout`, active: true });
+  const b = await browser.tabs.create({ url: `${SITE}/search`, active: false });
   await dispatch('set', { tab: a.id, preset: saved[0]?.id, reload: true });
   await dispatch('set', { tab: b.id, preset: saved[1]?.id, reload: true });
+}
+
+function lane(name: string, color = PALETTE[0]): Omit<Preset, 'id'> {
+  return { name, color: color as string, headers: [h('x-env', name)], domains: [] };
 }
 
 function h(name: string, value: string) {
