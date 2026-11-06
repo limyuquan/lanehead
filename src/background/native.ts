@@ -1,6 +1,6 @@
 /**
  * Native bridge to the `lanehead` CLI: the host (registered by `lanehead install`) forwards CLI
- * requests to `dispatch`. See docs/CONTRACTS.md section 5.
+ * requests to `dispatch`.
  *
  * While agent control is on, the worker connects at start, when the setting is turned on, and on
  * a 30 s alarm whenever it has no port. An open port keeps the worker alive; the alarm brings a

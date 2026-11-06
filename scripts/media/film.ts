@@ -22,7 +22,7 @@ import type { Browser, Locator, Page } from '@playwright/test';
 import { EXTENSION_PATH } from '../../tests/e2e/fixtures';
 
 export const FPS = 30;
-export const OUT_DIR = path.resolve('docs/media');
+export const OUT_DIR = path.resolve('media');
 /** Stage size in CSS px, and its device scale: the videos are 1920×1200. */
 export const STAGE = { w: 1200, h: 750, scale: 1.6 };
 
@@ -293,7 +293,7 @@ export class Film {
     return this.frame / FPS;
   }
 
-  /** Encodes `<name>.mp4`, `.webm`, `.gif` and the poster `<name>.png` into docs/media. */
+  /** Encodes `<name>.mp4`, `.webm`, `.gif` and the poster `<name>.png` into media. */
   async finish(): Promise<{ file: string; bytes: number }[]> {
     await this.stage.close();
     mkdirSync(OUT_DIR, { recursive: true });

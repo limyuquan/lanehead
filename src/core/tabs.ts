@@ -1,4 +1,4 @@
-/** How `set` changes a tab's state. See docs/CONTRACTS.md section 3. */
+/** How `set` changes a tab's state. */
 import { mergeHeaders } from './headers';
 import type { Header, Preset, TabState } from './types';
 

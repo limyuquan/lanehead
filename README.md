@@ -3,7 +3,7 @@
 Test two backends side by side in Chrome. Point one tab at your feature branch and the next at
 staging, at the same time, and let your coding agent switch them for you.
 
-<img src="docs/media/hero.gif" width="900" alt="Two tabs of the same site side by side: the left tab is on lane feature_checkout and the right on feature_search; each page shows the x-env header it received, and Lanehead's popup shows each tab's lane">
+<img src="media/hero.gif" width="900" alt="Two tabs of the same site side by side: the left tab is on lane feature_checkout and the right on feature_search; each page shows the x-env header it received, and Lanehead's popup shows each tab's lane">
 
 Website: [limyuquan.github.io/lanehead](https://limyuquan.github.io/lanehead/)
 
@@ -26,8 +26,8 @@ Website: [limyuquan.github.io/lanehead](https://limyuquan.github.io/lanehead/)
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/media/switch.gif" alt="In the popup, picking another lane; a Reload tab band appears, and after reloading the page shows the new header"></td>
-    <td width="50%"><img src="docs/media/edit.gif" alt="In the popup, + Add header, typing a name and value, Enter: the header joins the lane"></td>
+    <td width="50%"><img src="media/switch.gif" alt="In the popup, picking another lane; a Reload tab band appears, and after reloading the page shows the new header"></td>
+    <td width="50%"><img src="media/edit.gif" alt="In the popup, + Add header, typing a name and value, Enter: the header joins the lane"></td>
   </tr>
   <tr>
     <td>Switch a tab's lane, then reload to apply it.</td>
@@ -78,13 +78,13 @@ the hidden `.output` folder. To update: `git pull && pnpm build`, then ↻.
 | New lanes, all tabs at once, settings | **Manage** in the popup |
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/media/manage-dark.png">
-  <img src="docs/media/manage-light.png" alt="Lanehead's manage page: lanes with their headers, the tabs on each lane, and settings">
+  <source media="(prefers-color-scheme: dark)" srcset="media/manage-dark.png">
+  <img src="media/manage-light.png" alt="Lanehead's manage page: lanes with their headers, the tabs on each lane, and settings">
 </picture>
 
 **Let your agent drive it**
 
-<img src="docs/media/agent.gif" width="900" alt="A terminal runs lanehead tabs, then lanehead set with -H 'x-env: feature_search'; the command prints JSON and the browser tab next to it changes lane">
+<img src="media/agent.gif" width="900" alt="A terminal runs lanehead tabs, then lanehead set with -H 'x-env: feature_search'; the command prints JSON and the browser tab next to it changes lane">
 
 ```sh
 lanehead tabs --url example.com                  # find the tab
@@ -92,8 +92,7 @@ lanehead set 123456 -H 'x-env: lane_a' --reload  # that tab sends it from now on
 lanehead open https://example.com -p staging     # a new tab on a saved lane
 ```
 
-Every command prints one line of JSON. Setup and the rest are in [For LLMs](#for-llms) and
-[docs/AGENTS.md](docs/AGENTS.md).
+Every command prints one line of JSON. Setup and the rest are in [For LLMs](#for-llms).
 
 **Limits**
 
@@ -220,7 +219,12 @@ lanehead clear <tab> [--reload]
   URL from `status` (usually `http://127.0.0.1:47823/`, `?tab=<id>` for one tab): plain HTML forms
   that run the same operations.
 
-Full reference, security model and control page: [docs/AGENTS.md](docs/AGENTS.md).
+**Security.** The CLI talks to the extension through a socket in `~/.lanehead/run/` that only
+your OS user can open (folder 0700, socket 0600). Web pages can't reach Lanehead: it has no
+content scripts and no `externally_connectable`. The control page listens on `127.0.0.1` only,
+checks `Host` and `Origin`, sends no CORS headers and can't be framed; on a machine shared with
+other OS users, turn agent control off when you don't need it. The bridge forwards only
+Lanehead's own operations, and nothing leaves the machine.
 
 ### 5. Update or remove
 

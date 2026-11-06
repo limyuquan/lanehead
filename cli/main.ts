@@ -1,6 +1,6 @@
 /**
  * `lanehead`: the CLI agents use to give browser tabs their own request headers, and (as the
- * hidden `host` command) the native host the browser starts. See docs/CONTRACTS.md section 6.
+ * hidden `host` command) the native host the browser starts.
  *
  * stdout: one line of compact JSON, the result or `{"error":{code,message}}`.
  * Exit: 0 ok, 1 operation error, 2 usage error, 3 not connected.

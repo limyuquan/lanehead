@@ -22,7 +22,7 @@ on:
       - src/styles/**
       - cli/args.ts
       - cli/format.ts
-      - docs/media/**
+      - media/**
       - public/icon/**
       - .github/workflows/site.yml
 

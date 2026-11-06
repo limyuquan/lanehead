@@ -1,4 +1,4 @@
-/** Toolbar badge and tooltip for a tab. See docs/CONTRACTS.md section 4. */
+/** Toolbar badge and tooltip for a tab. */
 import type { Lane } from './compile';
 
 /** Preset colors. Each reads well as the background of white badge text. */

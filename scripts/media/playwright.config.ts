@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
 /**
- * Media captures (`pnpm media`): docs/media/ from the real extension and CLI. Separate from the
+ * Media captures (`pnpm media`): media/ from the real extension and CLI. Separate from the
  * e2e config, whose testDir (tests/e2e) never includes this folder; the spec also skips itself
  * unless LANEHEAD_MEDIA=1. Paths in the specs are relative to the repo root, where pnpm runs.
  */

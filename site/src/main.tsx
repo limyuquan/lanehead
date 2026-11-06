@@ -17,7 +17,7 @@ if (root) {
 // ---- Copy buttons. ----
 wireCopyButtons();
 
-// ---- Media: captured clips from docs/media. ----
+// ---- Media: captured clips from media. ----
 // Each <video data-src="…/name"> gets its sources (webm, mp4) once it is near the viewport, and
 // plays only while visible. With reduced motion it stays on its poster. A clip whose poster and
 // video are both missing hides its frame.

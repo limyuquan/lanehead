@@ -1,4 +1,4 @@
-/** Tab state → effective headers and DNR session rules. See docs/CONTRACTS.md section 2. */
+/** Tab state → effective headers and DNR session rules. */
 import type { Browser } from 'wxt/browser';
 import { mergeHeaders } from './headers';
 import type { Header, Preset, TabState } from './types';

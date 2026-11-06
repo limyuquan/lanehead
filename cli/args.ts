@@ -1,4 +1,4 @@
-/** Command line → command. See docs/CONTRACTS.md section 6. */
+/** Command line → command. */
 import { parseArgs } from 'node:util';
 import { parseHeaderLines } from '../src/core/headers';
 import { type Header, LaneheadError, type Op } from '../src/core/types';

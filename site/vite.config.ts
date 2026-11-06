@@ -27,7 +27,7 @@ const TYPES: Record<string, string> = {
 
 /**
  * Files that live elsewhere in the repo, served at `<base><prefix>/…` in dev and copied into the
- * build: the extension's toolbar icons (`public/icon/`) and the captured media (`docs/media/`,
+ * build: the extension's toolbar icons (`public/icon/`) and the captured media (`media/`,
  * made by `pnpm media`; GIFs are for the README and stay out). A missing folder is no error: the
  * page shows the poster, or nothing, for media that isn't there.
  */
@@ -36,10 +36,10 @@ function repoFiles(): Plugin {
     { prefix: 'icon', dir: r('../public/icon'), keep: (f: string) => f.endsWith('.png') },
     {
       prefix: 'media',
-      dir: r('../docs/media'),
+      dir: r('../media'),
       keep: (f: string) =>
         /^(hero|agent|switch|edit)\.(png|mp4|webm)$/.test(f) &&
-        statSync(join(r('../docs/media'), f)).size > 1024,
+        statSync(join(r('../media'), f)).size > 1024,
     },
   ];
   const list = (dir: string, keep: (f: string) => boolean) =>

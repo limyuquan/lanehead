@@ -1,6 +1,6 @@
 /**
  * Lean CLI output: only what an agent needs, so it spends few tokens. The API keeps the full
- * TabInfo for the UI. See docs/CONTRACTS.md section 6.
+ * TabInfo for the UI.
  */
 import type { Preset, Status, TabInfo } from '../src/core/types';
 

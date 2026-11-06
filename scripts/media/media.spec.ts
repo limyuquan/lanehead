@@ -3,7 +3,7 @@
  *
  *   pnpm media
  *
- * Writes docs/media/ (see docs/media/README.md). Skipped unless LANEHEAD_MEDIA=1; the normal
+ * Writes media/ (see media/README.md). Skipped unless LANEHEAD_MEDIA=1; the normal
  * `playwright test` (testDir tests/e2e) never sees this folder.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -109,14 +109,14 @@ function report(name: string, film: Film, files: { file: string; bytes: number }
 
 test('hero: two tabs, two lanes', async ({ context, lh, serviceWorker: sw, stageBrowser }) => {
   const film = await Film.open(stageBrowser, 'hero', 'browser');
-  const [checkout, search] = await seedLanes(lh);
+  const [checkout, , staging] = await seedLanes(lh);
   const a = await openTab(lh, film, CART);
   const b = await openTab(lh, film, SEARCH);
   await closeBlank(context);
   await lh.api('set', { tab: a.id, preset: checkout.id, reload: true });
-  await lh.api('set', { tab: b.id, preset: search.id, reload: true });
+  await lh.api('set', { tab: b.id, preset: staging.id, reload: true });
   await expect(sent(a.page)).toHaveText('feature_checkout');
-  await expect(sent(b.page)).toHaveText('feature_search');
+  await expect(sent(b.page)).toHaveText('staging');
   const tabs = [a, b];
   const popups = new Map([
     [a, await popupFor(lh, a.id)],

@@ -1,7 +1,6 @@
 /**
  * The one dispatcher. The popup and manage page call it through runtime messages, the native
- * host (phase 3) through the native port: same validation, same results. See docs/CONTRACTS.md
- * section 3.
+ * host (phase 3) through the native port: same validation, same results.
  *
  * A mutation resolves only after the session rules are installed (and tabs reloaded, if asked or
  * if reloadOnChange is on).

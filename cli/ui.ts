@@ -2,7 +2,6 @@
  * The control page: a plain HTML page the native host serves on 127.0.0.1, so agents that only
  * have browser tools (no shell) can switch tab headers by filling in forms. No JavaScript; every
  * action is a form POST that runs the same `dispatch` op as the CLI, then redirects back.
- * See docs/CONTRACTS.md section 7.
  */
 import { randomUUID } from 'node:crypto';
 import http from 'node:http';

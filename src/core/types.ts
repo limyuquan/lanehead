@@ -1,4 +1,4 @@
-/** Lanehead data model. See docs/CONTRACTS.md sections 1 and 3. */
+/** Lanehead data model. */
 
 /** One request header. `name` is a lowercase HTTP token; `value` is 1–4096 chars, no CR/LF/NUL. */
 export type Header = { name: string; value: string };

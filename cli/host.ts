@@ -3,7 +3,6 @@
  * listens on `<home>/run/<instance>.sock` and forwards each CLI request line to the browser and
  * the reply back, and serves the control page for browser-only agents (cli/ui.ts). stdout
  * carries native frames only; diagnostics go to stderr.
- * See docs/CONTRACTS.md section 5.
  */
 import { chmodSync, rmSync, statSync } from 'node:fs';
 import net from 'node:net';
