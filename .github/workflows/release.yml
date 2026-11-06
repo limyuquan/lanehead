@@ -1,6 +1,13 @@
-# Builds the extension zip and the `lanehead` CLI and attaches both to a GitHub Release.
-# Runs when a version tag is pushed (git tag v0.1.0 && git push origin v0.1.0),
+# Builds the extension zip and the `lanehead` CLI and attaches them, with the installer, to a
+# GitHub Release. Runs when a version tag is pushed (git tag v0.1.0 && git push origin v0.1.0),
 # or by hand from the Actions tab for an existing tag.
+#
+# Assets (each also reachable at releases/latest/download/<name>):
+#   lanehead-chrome.zip            the extension, stable name (what install.sh downloads)
+#   lanehead-<version>-chrome.zip  the same file, versioned name
+#   lanehead.js                    the CLI and native host (Node >= 22)
+#   install.sh                     sets up both on macOS/Linux
+#   SHA256SUMS
 name: Release
 
 on:
@@ -18,6 +25,7 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
     steps:
@@ -34,16 +42,45 @@ jobs:
         run: |
           version="$(node -p "require('./package.json').version")"
           test "v$version" = "$TAG" || { echo "Tag $TAG doesn't match package.json version $version"; exit 1; }
+          echo "VERSION=$version" >> "$GITHUB_ENV"
       - run: pnpm check
+      - name: Lint the installer
+        run: shellcheck -s sh scripts/install.sh
+      # `pnpm zip` is the production build, which keeps the manifest `key` (fixed extension ID).
+      # Never `zip:store` here: it drops the key and the native host would refuse the extension.
       - run: pnpm zip && pnpm build:cli
+      - name: Check the zip keeps the fixed extension ID
+        run: node scripts/verify-zip.mjs ".output/lanehead-$VERSION-chrome.zip"
+      - name: Collect the assets
+        run: |
+          mkdir release
+          cp ".output/lanehead-$VERSION-chrome.zip" release/
+          cp ".output/lanehead-$VERSION-chrome.zip" release/lanehead-chrome.zip
+          cp dist/lanehead.js scripts/install.sh release/
+          (cd release && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          zip="$(ls .output/lanehead-*-chrome.zip)"
-          notes="Download **$(basename "$zip")**, unzip it, then in Chrome open \`chrome://extensions\`, turn on **Developer mode**, click **Load unpacked** and choose the unzipped folder. For agents, download **lanehead.js** and run \`node lanehead.js install\`. Full steps: [README](https://github.com/${{ github.repository }}#install)."
+          repo="https://github.com/${{ github.repository }}"
+          cat > notes.md <<EOF
+          **Set up with your coding agent** (macOS, Linux; Node.js 22+): ask it to follow the
+          [README's setup section]($repo#for-llms), or run
+
+          \`\`\`sh
+          curl -fsSL $repo/releases/latest/download/install.sh | sh
+          \`\`\`
+
+          It installs the \`lanehead\` CLI and its browser bridge, and unzips the extension to
+          \`~/.lanehead/extension\`. Then, in Chrome: \`chrome://extensions\` → **Developer mode** →
+          **Load unpacked** → choose that folder.
+
+          **Just the extension:** download **lanehead-$VERSION-chrome.zip**, unzip it somewhere
+          permanent, and load that folder the same way. To update, replace the folder's contents and
+          click ↻ on Lanehead's card.
+          EOF
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$zip" dist/lanehead.js --clobber
+            gh release upload "$TAG" release/* --clobber
           else
-            gh release create "$TAG" "$zip" dist/lanehead.js --title "Lanehead $TAG" --notes "$notes"
+            gh release create "$TAG" release/* --title "Lanehead $TAG" --notes-file notes.md
           fi

@@ -1,5 +1,7 @@
 # Checks every push and pull request: typecheck, lint, unit tests, then the headless e2e suite
-# (extension + `lanehead` CLI in Playwright's Chromium).
+# (extension + `lanehead` CLI in Playwright's Chromium). The `build` job also uploads the
+# extension zip, the CLI and the installer as a workflow artifact, so a build can be tried without
+# tagging a release.
 name: CI
 
 on:
@@ -38,3 +40,37 @@ jobs:
           name: test-results
           path: test-results/
           retention-days: 7
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Lint the installer
+        run: shellcheck -s sh scripts/install.sh
+      - run: pnpm zip && pnpm build:cli
+      - name: Check the zip keeps the fixed extension ID
+        run: node scripts/verify-zip.mjs .output/lanehead-*-chrome.zip
+      - name: Collect the build
+        run: |
+          mkdir build
+          cp .output/lanehead-*-chrome.zip build/
+          cp .output/lanehead-*-chrome.zip build/lanehead-chrome.zip
+          cp dist/lanehead.js scripts/install.sh build/
+      - name: Try the installer on the build
+        run: |
+          export HOME="$(mktemp -d)"
+          LANEHEAD_RELEASE_URL="file://$PWD/build" sh scripts/install.sh
+          test -f "$HOME/.lanehead/extension/manifest.json"
+          node "$HOME/.lanehead/host/lanehead.js" status
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lanehead-${{ github.sha }}
+          path: build/
+          retention-days: 30

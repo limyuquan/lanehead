@@ -37,4 +37,5 @@ Errors print `{"error":{"code","message"}}`.
 - Exit 2: fix the command as the message shows.
 - Exit 1 (NO_TAB, NO_PRESET, NOT_OWN): do what the message says. NO_TAB: run `lanehead tabs` again.
 - Exit 3 (NOT_CONNECTED): tell the user the message; do not retry in a loop.
+- No `lanehead` command: set it up per https://github.com/limyuquan/lanehead#for-llms
 - Several browsers: `tabs` marks each tab with `"i"`; pass `-i <i>` when asked to.
