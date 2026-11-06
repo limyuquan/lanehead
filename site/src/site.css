@@ -1,7 +1,9 @@
 /*
- * Lanehead website. Cool graphite ink, calm type, the product in plain window frames. The motif is
- * lanes: thin parallel lines in the extension's lane colors (src/core/badge.ts PALETTE), each named
- * at its start, with the browser window sitting across them. Those lane colors are the only color.
+ * Lanehead website. Cool graphite ink, calm type, the product in plain window frames. The hero is a
+ * routing picture: two tabs of one site, each tab's requests along its own lane carrying its
+ * header, each reaching its own backend. Lanes, thin lines in the extension's lane colors
+ * (src/core/badge.ts PALETTE), stay as a quiet accent (the demo's tab lanes, the feature rail).
+ * Those lane colors are the only color.
  *
  * The extension's stylesheet comes first (Tailwind and the popup's classes), so the demo's popup
  * looks exactly like the extension's. Site rules sit in the `components` layer, below the popup's
@@ -151,7 +153,7 @@ html {
   }
 
   /* Inline code and keys in the page's text (never inside the demo's popup). */
-  :where(.lede, .facts, .trio, .steps, .agent-line) code {
+  :where(.lede, .facts, .trio, .steps) code {
     font-family: var(--mono);
     font-size: 0.86em;
     color: var(--ink);
@@ -323,7 +325,7 @@ html {
     }
   }
 
-  /* ---- Lanes ---- */
+  /* ---- Lanes (the demo's tab lanes) ---- */
   .lanes {
     --stroke: 2px;
     display: grid;
@@ -410,45 +412,395 @@ html {
     border-radius: 3px;
     background: var(--lane-c);
   }
-  .chip-badge {
-    padding: 0 4px;
-    border-radius: 3px;
-    background: var(--lane);
-    color: #fff;
-    font: 600 9.5px / 15px var(--sans);
-    letter-spacing: 0.01em;
-  }
-
-  /* The hero's road: four lanes, the browser window across them. */
-  .road {
+  /* ---- The hero's routing picture ---- */
+  /*
+   * One grid. Wide: captions, then the browser (its frame spans both rows) | each tab's lane, its
+   * header on it | each backend. Narrow: the same pieces top to bottom, the lanes running down.
+   */
+  .routes {
+    --tab-h: 64px;
     position: relative;
-    margin-top: 56px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto 34px auto 132px auto auto;
+    column-gap: 12px;
+    margin: 48px 0 0;
   }
-  .road .lanes {
-    grid-auto-rows: 38px;
-    margin-bottom: 20px;
+  .routes > * {
+    --lane-c: color-mix(in oklab, var(--lane) 62%, white);
   }
-  .road .lane-label {
-    min-width: 17ch;
+  .rt-cap {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.3;
+    color: var(--ink-3);
   }
-  .road-win {
+  .rt-cap-1 {
+    grid-area: 1 / 1 / 2 / 3;
+    margin-bottom: 10px;
+  }
+  /* Narrow: the mechanism is told under the picture; the backends name themselves. */
+  .rt-cap-2 {
+    grid-area: 6 / 1 / 7 / 3;
+    margin-top: 16px;
+  }
+  .rt-cap-3 {
+    display: none;
+  }
+  /* The browser window: its toolbar on top, the two tabs inside. */
+  .rt-frame {
+    grid-area: 2 / 1 / 4 / 3;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-inline: -10px;
+    padding: 7px 12px 0;
+    height: calc(100% + 10px);
+    border-radius: 10px;
+    background: var(--win);
+    box-shadow: var(--shadow);
+  }
+  .rt-lights {
+    display: inline-flex;
+    gap: 5px;
+    padding-top: 6px;
+  }
+  .rt-lights i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #343a43;
+  }
+  .rt-omni {
+    flex: 1;
+    min-width: 0;
+    height: 20px;
+    padding: 0 10px;
+    border-radius: 10px;
+    background: var(--win-3);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    line-height: 21px;
+    color: var(--ink-2);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .rt-tab {
     position: relative;
     z-index: 1;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-content: center;
+    column-gap: 9px;
+    min-width: 0;
+    height: var(--tab-h);
+    padding: 0 12px;
+    border-radius: 8px;
+    background: var(--win-2);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, var(--lane-c) 30%, transparent),
+      inset 0 2px 0 var(--lane-c);
   }
-  @media (min-width: 960px) {
-    .road {
-      margin-top: 40px;
-      padding-block: 48px;
+  .rt-r1 {
+    grid-column: 1;
+  }
+  .rt-r2 {
+    grid-column: 2;
+  }
+  .rt-tab.rt-r1,
+  .rt-tab.rt-r2 {
+    grid-row: 3;
+  }
+  .rt-fav {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    background: var(--lane-c);
+    align-self: center;
+  }
+  .rt-title {
+    font-family: var(--display);
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.2;
+    padding-top: 2px;
+    color: var(--ink);
+  }
+  .rt-url {
+    grid-column: 1 / -1;
+    margin-top: 3px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--ink-3);
+    overflow-wrap: anywhere;
+  }
+
+  /* A tab's lane: a line in its color, requests running along it, its header on it. */
+  .rt-lane {
+    position: relative;
+    grid-row: 4;
+    display: grid;
+    place-items: center;
+    min-width: 0;
+  }
+  .rt-line,
+  .rt-run {
+    position: absolute;
+    left: calc(50% - 1px);
+    top: 0;
+    bottom: 12px;
+    width: 2px;
+  }
+  .rt-line {
+    background: color-mix(in oklab, var(--lane-c) 55%, transparent);
+  }
+  /* The arrowhead, into the backend. */
+  .rt-line::after {
+    content: "";
+    position: absolute;
+    left: -5px;
+    bottom: -9px;
+    width: 12px;
+    height: 10px;
+    background: var(--lane-c);
+    clip-path: polygon(0 0, 100% 0, 50% 100%);
+  }
+  /* A request: a wrapper as long as the line, sliding its own length, so it runs compositor-only. */
+  .rt-run {
+    animation: rt-run-y 2.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  }
+  .rt-run-2 {
+    animation-delay: -1.4s;
+  }
+  .rt-r2 .rt-run {
+    animation-duration: 3.2s;
+  }
+  .rt-r2 .rt-run-2 {
+    animation-delay: -1.6s;
+  }
+  .rt-run i {
+    position: absolute;
+    left: -2px;
+    top: -6px;
+    width: 6px;
+    height: 16px;
+    border-radius: 3px;
+    background: var(--lane-c);
+  }
+  @keyframes rt-run-y {
+    0% {
+      transform: translateY(0);
+      opacity: 0;
     }
-    .road .lanes {
-      position: absolute;
-      inset: 48px calc((100% - 100vw) / 2) 48px var(--gutter);
-      grid-auto-rows: 1fr;
+    12%,
+    82% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+  }
+  @keyframes rt-run-x {
+    0% {
+      transform: translateX(0);
+      opacity: 0;
+    }
+    12%,
+    82% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rt-run {
+      display: none;
+    }
+  }
+  .rt-tag {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    justify-items: center;
+    padding: 5px 10px 4px;
+    border-radius: 7px;
+    background: var(--bg);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--lane-c) 55%, transparent);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.35;
+    color: var(--lane-c);
+    white-space: nowrap;
+    margin-bottom: 12px;
+  }
+  .rt-tag span {
+    color: var(--ink-2);
+  }
+
+  .rt-back {
+    grid-row: 5;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: center;
+    column-gap: 10px;
+    min-width: 0;
+    height: var(--tab-h);
+    padding: 0 12px;
+    border-radius: 8px;
+    background: var(--win);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, var(--lane-c) 45%, transparent),
+      0 20px 40px -24px rgb(0 0 0 / 0.8);
+  }
+  .rt-srv {
+    display: none;
+    grid-row: span 2;
+    align-self: center;
+    fill: color-mix(in oklab, var(--lane-c) 14%, transparent);
+    stroke: var(--lane-c);
+    stroke-width: 1.2;
+  }
+  .rt-srv circle {
+    fill: var(--lane-c);
+    stroke: none;
+  }
+  .rt-name {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.25;
+    color: var(--lane-c);
+    overflow-wrap: anywhere;
+  }
+  .rt-kind {
+    font-size: 12.5px;
+    line-height: 1.3;
+    color: var(--ink-2);
+  }
+
+  @media (min-width: 860px) {
+    .routes {
+      --tab-h: 68px;
+      grid-template-columns: minmax(250px, 3fr) minmax(0, 6fr) minmax(230px, 3fr);
+      grid-template-rows: auto 40px var(--tab-h) var(--tab-h);
+      row-gap: 16px;
+      column-gap: 0;
+      margin-top: 72px;
+    }
+    .rt-cap {
+      display: block;
+      margin-bottom: 2px;
+    }
+    .rt-cap-1 {
+      grid-area: 1 / 1;
+    }
+    .rt-cap-2 {
+      grid-area: 1 / 2;
+      margin-top: 0;
+      text-align: center;
+    }
+    .rt-cap-3 {
+      grid-area: 1 / 3;
+      padding-left: 2px;
+    }
+    .rt-frame {
+      grid-area: 2 / 1 / 5 / 2;
       margin: 0;
+      height: calc(100% + 14px);
+      padding: 10px 14px 0;
     }
-    .road .road-win {
-      width: 73%;
-      margin-left: auto;
+    .rt-lights {
+      padding-top: 8px;
+    }
+    .rt-omni {
+      height: 24px;
+      font-size: 11px;
+      line-height: 25px;
+    }
+    .rt-r1,
+    .rt-r2 {
+      grid-column: auto;
+    }
+    .rt-r1 {
+      grid-row: 3;
+    }
+    .rt-r2 {
+      grid-row: 4;
+    }
+    .rt-tab.rt-r1 {
+      grid-row: 3;
+    }
+    .rt-tab.rt-r2 {
+      grid-row: 4;
+    }
+    .rt-tab {
+      grid-column: 1;
+      margin-inline: 14px;
+    }
+    .rt-lane {
+      grid-column: 2;
+    }
+    .rt-back {
+      grid-column: 3;
+      grid-template-columns: auto minmax(0, 1fr);
+      padding: 0 16px;
+    }
+    .rt-line,
+    .rt-run {
+      left: 0;
+      right: 12px;
+      top: calc(50% - 1px);
+      bottom: auto;
+      width: auto;
+      height: 2px;
+    }
+    .rt-line::after {
+      left: auto;
+      right: -9px;
+      top: -5px;
+      bottom: auto;
+      width: 10px;
+      height: 12px;
+      clip-path: polygon(0 0, 100% 50%, 0 100%);
+    }
+    .rt-run {
+      animation-name: rt-run-x;
+    }
+    .rt-run i {
+      left: -6px;
+      top: -2px;
+      width: 16px;
+      height: 6px;
+    }
+    .rt-tag {
+      display: block;
+      margin: 0 12px 0 0;
+      padding: 6px 12px 5px;
+      font-size: 12.5px;
+    }
+    .rt-name {
+      font-size: 13px;
+    }
+    .rt-srv {
+      display: block;
+    }
+  }
+
+  /* The real thing, under the picture. */
+  .proof {
+    margin-top: 72px;
+  }
+  .proof-cap {
+    margin-bottom: 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-2);
+  }
+  @media (min-width: 860px) {
+    .proof {
+      margin-top: 112px;
     }
   }
 
@@ -734,30 +1086,71 @@ html {
     color: var(--ink-2);
     font-size: 14.5px;
   }
-  .steps a,
-  .agent-line a {
+  .steps a {
     color: var(--ink);
     text-decoration: underline;
     text-decoration-color: var(--line-2);
     text-underline-offset: 3px;
   }
-  .steps a:hover,
-  .agent-line a:hover {
+  .steps a:hover {
     text-decoration-color: currentColor;
   }
-  .agent-line {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 6px 10px;
+  .agent {
+    display: grid;
+    justify-items: start;
+    gap: 12px;
     margin-top: 56px;
+    max-width: 620px;
+  }
+  .agent-q {
     font-size: 14.5px;
   }
-  .say {
-    padding: 3px 8px;
-    border-radius: 6px;
+
+  /* A command or prompt to copy, with its Copy button. */
+  .copy {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    border-radius: 8px;
     background: var(--win-3);
     box-shadow: inset 0 0 0 1px var(--line-2);
+  }
+  .copy-text {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 14px 11px;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+  .copy-btn {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 7px;
+    min-width: 92px;
+    padding: 0 14px;
+    border-left: 1px solid var(--line-2);
+    border-radius: 0 8px 8px 0;
+    font-size: 13px;
+    color: var(--ink-2);
+    transition:
+      color 160ms ease,
+      background-color 160ms ease;
+  }
+  .copy-btn:hover {
+    color: var(--ink);
+    background: rgb(206 215 228 / 0.05);
+  }
+  .copy-btn:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: -2px;
+  }
+  .copy-btn[data-copied] {
+    color: color-mix(in oklab, #188038 60%, white);
   }
   .install .actions {
     margin-top: 32px;

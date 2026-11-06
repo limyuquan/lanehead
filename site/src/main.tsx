@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { wireCopyButtons } from './copy';
 import { Demo } from './demo/Demo';
 import './site.css';
 
@@ -12,6 +13,9 @@ if (root) {
     </StrictMode>,
   );
 }
+
+// ---- Copy buttons. ----
+wireCopyButtons();
 
 // ---- Media: captured clips from docs/media. ----
 // Each <video data-src="…/name"> gets its sources (webm, mp4) once it is near the viewport, and

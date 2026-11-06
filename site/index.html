@@ -24,7 +24,7 @@
     <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="Lanehead: two tabs of the same site, each in its own lane (feature_checkout and feature_search), drawn as coloured lanes running behind the browser window."
+      content="Lanehead: two tabs of the same site. The Cart tab's requests carry x-env: feature_checkout and reach the feature_checkout backend; the Search tab's carry x-env: staging and reach the staging backend."
     />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icon/32.png" />
@@ -88,29 +88,71 @@
           </div>
         </div>
 
-        <!-- The lanes: each tab rides its own; the browser window sits across all of them. -->
-        <div class="wrap road" data-road>
-          <ol class="lanes" aria-hidden="true">
-            <li class="lane" style="--lane: #1a73e8">
-              <span class="lane-label">feature_checkout</span>
-              <span class="chip"><i class="chip-fav"></i>Cart<b class="chip-badge">chec</b></span>
-              <span class="lane-line"></span>
-            </li>
-            <li class="lane" style="--lane: #8430ce">
-              <span class="lane-label">feature_search</span>
-              <span class="chip"><i class="chip-fav"></i>Search<b class="chip-badge">sear</b></span>
-              <span class="lane-line"></span>
-            </li>
-            <li class="lane" style="--lane: #188038">
-              <span class="lane-label">staging</span>
-              <span class="lane-line"></span>
-            </li>
-            <li class="lane lane-off">
-              <span class="lane-label">off</span>
-              <span class="lane-line"></span>
-            </li>
-          </ol>
-          <figure class="win media-win road-win" data-media-frame>
+        <!--
+          How it works, at a glance: two tabs of the same site, each tab's requests carrying its own
+          header along its own lane, each reaching its own backend.
+        -->
+        <div class="wrap">
+          <figure class="routes" data-routes aria-labelledby="routes-title">
+            <figcaption class="sr-only" id="routes-title">
+              How Lanehead routes two tabs of the same site to two backends.
+            </figcaption>
+            <p class="rt-cap rt-cap-1">Same site, two tabs</p>
+            <p class="rt-cap rt-cap-2">Lanehead adds each tab's header</p>
+            <p class="rt-cap rt-cap-3">Two backends</p>
+            <div class="rt-frame" aria-hidden="true">
+              <span class="rt-lights"><i></i><i></i><i></i></span>
+              <span class="rt-omni">shop.example.com</span>
+            </div>
+            <div class="rt-tab rt-r1" style="--lane: #1a73e8" data-testid="route-tab">
+              <i class="rt-fav" aria-hidden="true"></i>
+              <span class="rt-title">Cart</span>
+              <span class="rt-url">shop.example.com/cart</span>
+            </div>
+            <div class="rt-lane rt-r1" style="--lane: #1a73e8">
+              <span class="rt-line" aria-hidden="true"></span>
+              <span class="rt-run" aria-hidden="true"><i></i></span>
+              <span class="rt-run rt-run-2" aria-hidden="true"><i></i></span>
+              <code class="rt-tag" data-testid="route-header"><span>x-env:</span> feature_checkout</code>
+            </div>
+            <div class="rt-back rt-r1" style="--lane: #1a73e8" data-testid="route-backend">
+              <svg class="rt-srv" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
+                <rect x="2.5" y="3" width="15" height="6" rx="1.6" />
+                <rect x="2.5" y="11" width="15" height="6" rx="1.6" />
+                <circle cx="6" cy="6" r="1" />
+                <circle cx="6" cy="14" r="1" />
+              </svg>
+              <span class="rt-name">feature_checkout</span>
+              <span class="rt-kind">backend</span>
+            </div>
+            <div class="rt-tab rt-r2" style="--lane: #188038" data-testid="route-tab">
+              <i class="rt-fav" aria-hidden="true"></i>
+              <span class="rt-title">Search</span>
+              <span class="rt-url">shop.example.com/search</span>
+            </div>
+            <div class="rt-lane rt-r2" style="--lane: #188038">
+              <span class="rt-line" aria-hidden="true"></span>
+              <span class="rt-run" aria-hidden="true"><i></i></span>
+              <span class="rt-run rt-run-2" aria-hidden="true"><i></i></span>
+              <code class="rt-tag" data-testid="route-header"><span>x-env:</span> staging</code>
+            </div>
+            <div class="rt-back rt-r2" style="--lane: #188038" data-testid="route-backend">
+              <svg class="rt-srv" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
+                <rect x="2.5" y="3" width="15" height="6" rx="1.6" />
+                <rect x="2.5" y="11" width="15" height="6" rx="1.6" />
+                <circle cx="6" cy="6" r="1" />
+                <circle cx="6" cy="14" r="1" />
+              </svg>
+              <span class="rt-name">staging</span>
+              <span class="rt-kind">backend</span>
+            </div>
+          </figure>
+        </div>
+
+        <!-- The proof: the same idea in the real extension. -->
+        <div class="wrap proof">
+          <p class="proof-cap">What it looks like in Chrome</p>
+          <figure class="win media-win proof-win" data-media-frame>
             <video
               class="media"
               data-src="/media/hero"
@@ -316,11 +358,21 @@
             </li>
           </ol>
         </div>
-        <p class="agent-line">
-          <span class="dim">Using an agent?</span> Tell it:
-          <code class="say">Set up Lanehead from github.com/limyuquan/lanehead</code>
-          <a href="https://github.com/limyuquan/lanehead#for-llms">Instructions it follows →</a>
-        </p>
+        <div class="agent">
+          <p class="agent-q"><span class="dim">Using an agent?</span> Tell it:</p>
+          <div class="copy" data-copy>
+            <code class="copy-text" id="agent-prompt" data-copy-text>Set up Lanehead from github.com/limyuquan/lanehead</code>
+            <button type="button" class="copy-btn" aria-describedby="agent-prompt" data-copy-btn>
+              <svg viewBox="0 0 14 14" width="13" height="13" aria-hidden="true">
+                <rect x="4.5" y="4.5" width="7.5" height="7.5" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.2" />
+                <path d="M9.5 2.5H3.6a1.1 1.1 0 0 0-1.1 1.1v5.9" fill="none" stroke="currentColor" stroke-width="1.2" />
+              </svg>
+              <span data-copy-label>Copy</span>
+            </button>
+            <span class="sr-only" role="status" aria-live="polite" data-copy-status></span>
+          </div>
+          <a class="more" href="https://github.com/limyuquan/lanehead#for-llms">Instructions it follows →</a>
+        </div>
         <div class="actions">
           <a class="pill pill-light" href="https://github.com/limyuquan/lanehead/releases/latest">Download latest release</a>
           <a class="pill pill-dark" href="https://github.com/limyuquan/lanehead#readme">Read the README</a>
