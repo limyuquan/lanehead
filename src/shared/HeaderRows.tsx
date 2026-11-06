@@ -8,7 +8,8 @@
  * the rows, which show them inline.
  *
  * A row missing its name or value is a draft: leaving it is not "done" (no save, no error). Enter
- * is (live editors): it saves the row, and on the last row then opens a new one.
+ * is (live editors): it saves the row, and on the last row then opens a new one. Removing a row
+ * moves focus to the next row's name (else the previous row's, else "Add header").
  */
 import {
   type ClipboardEvent,
@@ -65,11 +66,19 @@ export function checkRows(rows: Row[], others: Header[] = []) {
       validateHeaders([...others, ...headers, h]);
       headers.push(h);
     } catch (err) {
-      errors[r.id] = (err as Error).message;
+      errors[r.id] = rowError(r, (err as Error).message);
     }
   }
   return { headers, errors };
 }
+
+/** Core's message, said plainer where a row shows what went wrong. */
+const rowError = (r: Row, message: string) =>
+  !r.name.trim()
+    ? 'Give this header a name.'
+    : /\s/.test(r.name.trim())
+      ? "Header names can't contain spaces."
+      : message;
 
 /** How a row was finished: Enter in it (live editors), or focus left it. */
 export type Done = 'enter' | 'blur';
@@ -87,8 +96,13 @@ type Props = {
   onRowDone?: (row: Row, how: Done) => unknown;
   /** Rows a paste changed or added, after `onRows`. */
   onPasted?: (rows: Row[]) => void;
-  /** Remove a row; default: drop it from `rows` (keeping one blank row). */
-  onRemove?: (row: Row) => void;
+  /**
+   * Remove a row; default: drop it from `rows` (keeping one blank row). Resolving false means it
+   * failed: focus stays on its × button.
+   */
+  onRemove?: (row: Row) => unknown;
+  /** Escape put a row back to its saved header. */
+  onRestored?: (row: Row) => void;
   /**
    * Rows save themselves: Enter saves the row (on the last row it then opens a new one), Escape
    * restores its saved header; Enter or Escape on an empty new row removes it.
@@ -108,6 +122,7 @@ export function HeaderRows({
   onRowDone,
   onPasted,
   onRemove,
+  onRestored,
   live = false,
   status,
   label,
@@ -115,13 +130,14 @@ export function HeaderRows({
 }: Props) {
   const base = useId();
   const fieldId = (row: Row, part: 'name' | 'value') => `${base}${row.id}-${part}`;
-  // Focus to move after the next render (a row just added).
+  const addButton = useRef<HTMLButtonElement>(null);
+  // Focus to move after the next render: a field's id, or 'add' for "Add header".
   const [focusNext, setFocusNext] = useState<string | null>(null);
   useEffect(() => {
-    if (focusNext) document.getElementById(focusNext)?.focus();
+    if (focusNext === 'add') addButton.current?.focus();
+    else if (focusNext) document.getElementById(focusNext)?.focus();
     setFocusNext(null);
   }, [focusNext]);
-  const addButton = useRef<HTMLButtonElement>(null);
 
   const update = (id: string, patch: Partial<Row>) =>
     onRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -132,6 +148,15 @@ export function HeaderRows({
       const rest = rs.filter((r) => r.id !== row.id);
       return rest.length ? rest : [spareRow()];
     });
+  };
+
+  // The × button: once the row is gone, focus the next row's name, else the previous one's, else
+  // "Add header". When removing fails, focus stays on ×.
+  const removeAndFocus = async (row: Row) => {
+    const i = rows.findIndex((r) => r.id === row.id);
+    const near = rows[i + 1] ?? rows[i - 1];
+    if ((await remove(row)) === false) return;
+    setFocusNext(near ? fieldId(near, 'name') : 'add');
   };
 
   const add = () => {
@@ -150,7 +175,8 @@ export function HeaderRows({
     }));
     if (!first) return;
     e.preventDefault();
-    const changed = { ...row, name: first.name, value: first.value || row.value };
+    // A line without a value pastes as a name with no value (a draft), never borrowing the old one.
+    const changed = { ...row, name: first.name, value: first.value };
     const added = more.map((h) => newRow(h));
     onRows((rs) => rs.flatMap((r) => (r.id === row.id ? [changed, ...added] : [r])));
     onPasted?.([changed, ...added]);
@@ -164,7 +190,7 @@ export function HeaderRows({
     if (!row.saved && isBlank(row)) {
       e.preventDefault();
       if (rows.length > 1) {
-        remove(row);
+        void remove(row);
         addButton.current?.focus();
       }
     } else if (e.key === 'Enter') {
@@ -174,6 +200,7 @@ export function HeaderRows({
     } else if (row.saved && isEdited(row)) {
       e.preventDefault();
       update(row.id, { name: row.saved.name, value: row.saved.value });
+      onRestored?.(row);
     }
   };
 
@@ -237,7 +264,7 @@ export function HeaderRows({
                 aria-label={name ? `Remove ${name}` : 'Remove header'}
                 title="Remove"
                 className="kv-remove"
-                onClick={() => remove(row)}
+                onClick={() => void removeAndFocus(row)}
               >
                 <svg viewBox="0 0 10 10" width="9" height="9" aria-hidden="true">
                   <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" strokeWidth="1.4" />
@@ -292,7 +319,8 @@ export function useDraftRows(initial: Header[]) {
           ? errors
           : Object.fromEntries(Object.entries(errors).filter(([id]) => shown.has(id))),
       onRowDone: (row: Row) => isFilled(row) && show([row.id]),
-      onPasted: (pasted: Row[]) => show(pasted.map((r) => r.id)),
+      // A pasted line without a value is a draft, like one typed.
+      onPasted: (pasted: Row[]) => show(pasted.filter(isFilled).map((r) => r.id)),
     },
     submit(): Header[] | null {
       setShown('all');

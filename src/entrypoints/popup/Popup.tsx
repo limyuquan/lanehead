@@ -250,10 +250,18 @@ export function Popup({ initial, standalone }: Props) {
     const renamed = sent.flatMap(({ row, h }) =>
       row.saved && row.saved.name !== h.name ? [row.saved.name] : [],
     );
-    const ok = await act(sent[0]?.row.id ?? 'lane', async () => {
+    const ids = sent.map((s) => s.row.id);
+    const ok = await act(ids[0] ?? 'lane', async () => {
       await call('set', { tab: tab.id, headers: sent.map((s) => s.h), ...keepGlobal });
       if (renamed.length) await call('clear', { tab: tab.id, names: renamed });
     });
+    // A batch (pasted lines) failed as one: every row in it says so.
+    if (!ok) {
+      setErrors((e) => ({
+        ...e,
+        ...Object.fromEntries(ids.map((id) => [id, e[ids[0] as string] ?? ''])),
+      }));
+    }
     if (ok) {
       // Saved: shown as stored, unless the user typed on in the meantime.
       setRows((rs) =>
@@ -273,12 +281,19 @@ export function Popup({ initial, standalone }: Props) {
     return ok && valid.length === edited.length;
   };
 
-  // Enter saves (or reports what is wrong). Leaving a row saves it only when both its name and
-  // value are typed; anything less is a draft, kept without a word.
+  // Enter saves (or reports what is wrong). Leaving a new row saves it only when both its name
+  // and value are typed; anything less is a draft, kept without a word. A saved row left
+  // incomplete says what is missing (the tab still sends the saved header; Escape brings it back).
   const rowDone = async (row: Row, how: Done): Promise<boolean> => {
     if (!row.saved && isBlank(row)) return true;
     if (how === 'blur' && !isFilled(row)) {
-      setError(row.id, null);
+      if (row.saved && isBlank(row)) {
+        setError(row.id, 'Give this header a name and a value, or remove it.');
+      } else if (row.saved) {
+        await saveRows([row]);
+      } else {
+        setError(row.id, null);
+      }
       return false;
     }
     if (isBlank(row)) return removeRow(row);
@@ -346,12 +361,14 @@ export function Popup({ initial, standalone }: Props) {
     <Disclosure
       id="own"
       title="Extra headers for this tab"
+      tooltip={
+        preset || tab.global
+          ? "Sent on top of the lane's headers. A header with the same name replaces the lane's."
+          : undefined
+      }
       open={ownOpen}
       onToggle={() => setOwnOpen(!ownOpen)}
     >
-      {(preset || tab.global) && (
-        <p className="pb-2 text-xs text-muted">Added to the lane's headers; same name wins.</p>
-      )}
       <HeaderRows
         live
         label="Extra headers for this tab"
@@ -359,16 +376,20 @@ export function Popup({ initial, standalone }: Props) {
         onRows={setRows}
         errors={errors}
         onRowDone={rowDone}
-        onPasted={saveRows}
+        // Pasted lines without a value are drafts, like typed ones.
+        onPasted={(pasted) => saveRows(pasted.filter(isFilled))}
         onRemove={removeRow}
+        onRestored={(row) => setError(row.id, null)}
+        placeholder={{ name: 'x-env', value: 'value' }}
         status={
           <p role="status" aria-live="polite" className="text-xs text-muted">
             {status}
           </p>
         }
       />
-      <p className="pt-1.5 text-xs text-muted">Saves on Enter or when you leave the row.</p>
-      <PasteTip />
+      <p className="pt-1 text-xs text-muted">
+        Enter saves · paste name: value lines to add several.
+      </p>
     </Disclosure>
   );
 
@@ -453,7 +474,8 @@ export function Popup({ initial, standalone }: Props) {
                 <LaneRow
                   color={globalPreset.color}
                   hollow
-                  name="Follow all tabs"
+                  prefix="Follow all tabs"
+                  name={globalPreset.name}
                   current={tab.global}
                   onClick={() => choose('follow')}
                 />
@@ -586,7 +608,8 @@ function LaneTitle({
 
 /**
  * What the tab sends, once: one line per header; its own ones marked when it also has a lane (the
- * mark opens them for editing). The name column has one width, so values line up between lanes.
+ * mark opens them for editing). The name column is 40% wide (at least 96px), so values line up
+ * between lanes.
  */
 function Sends({ tab, onEdit }: { tab: TabInfo; onEdit: (name: string) => void }) {
   const headers = Object.entries(tab.headers);
@@ -596,7 +619,7 @@ function Sends({ tab, onEdit }: { tab: TabInfo; onEdit: (name: string) => void }
     <>
       <dl
         aria-label="Sends"
-        className="mt-1.5 grid grid-cols-[96px_minmax(0,1fr)_auto] gap-x-4 font-mono text-xs leading-[22px]"
+        className="mt-1.5 grid grid-cols-[minmax(96px,40%)_minmax(0,1fr)_auto] gap-x-4 font-mono text-xs leading-[22px]"
       >
         {headers.map(([name, value]) => (
           <div key={name} className="contents">
@@ -634,27 +657,40 @@ type LaneRowProps = {
   keys?: string | undefined;
   color?: string;
   hollow?: boolean;
+  /** Shown before the name, which goes in parentheses: "Follow all tabs (staging)". */
+  prefix?: string;
   name: string;
   current: boolean;
   onClick: () => void;
 };
 
-function LaneRow({ keys, color, hollow, name, current, onClick }: LaneRowProps) {
+function LaneRow({ keys, color, hollow, prefix, name, current, onClick }: LaneRowProps) {
+  const bold = current ? 'font-semibold' : '';
   return (
     <button
       type="button"
+      aria-label={prefix ? `${prefix} (${name})` : undefined}
       aria-current={current}
       aria-keyshortcuts={keys}
       title={keys ? `Press ${keys}` : undefined}
       onClick={onClick}
       style={laneStyle(color)}
-      className={`grid h-8 w-full grid-cols-[8px_minmax(0,1fr)_16px] items-center gap-x-3 px-4 text-left hover:bg-hover ${current ? 'current-row' : ''}`}
+      className={`grid h-8 w-full grid-cols-[8px_minmax(0,1fr)_auto] items-center gap-x-3 px-4 text-left hover:bg-hover ${current ? 'current-row' : ''}`}
     >
       <span className={`dot ${hollow ? 'hollow' : ''}`} />
-      <Name text={name} className={current ? 'font-semibold' : ''} />
-      {/* The row's key, or a check on the current row (its key is still in the title). */}
-      <span aria-hidden="true" className="text-center">
-        {current ? <span className="lane-text text-xs">✓</span> : keys && <kbd>{keys}</kbd>}
+      {prefix ? (
+        <span className={`flex min-w-0 ${bold}`}>
+          <span className="shrink-0 whitespace-pre">{prefix} (</span>
+          <Name text={name} />
+          <span className="shrink-0">)</span>
+        </span>
+      ) : (
+        <Name text={name} className={bold} />
+      )}
+      {/* The row's key (dimmed on the current row, which has a check too). */}
+      <span aria-hidden="true" className="flex min-w-4 items-center justify-end gap-2">
+        {current && <span className="lane-text text-xs">✓</span>}
+        {keys && <kbd className={current ? 'opacity-55' : ''}>{keys}</kbd>}
       </span>
     </button>
   );
@@ -663,12 +699,14 @@ function LaneRow({ keys, color, hollow, name, current, onClick }: LaneRowProps) 
 function Disclosure({
   id,
   title,
+  tooltip,
   open,
   onToggle,
   children,
 }: {
   id: string;
   title: string;
+  tooltip?: string | undefined;
   open: boolean;
   onToggle: () => void;
   children: ReactNode;
@@ -680,6 +718,7 @@ function Disclosure({
         className="disclosure"
         aria-expanded={open}
         aria-controls={`${id}-panel`}
+        title={tooltip}
         onClick={onToggle}
       >
         <span>{title}</span>

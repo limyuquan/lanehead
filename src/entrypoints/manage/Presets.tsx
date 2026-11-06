@@ -141,7 +141,9 @@ export function Presets({ data }: { data: Data }) {
       {presets.length ? (
         <table className="w-full table-fixed border-collapse text-left">
           <thead className="text-xs text-muted">
-            <tr className="border-y border-line">
+            {/* Editing the first lane: the form takes the column labels' place (collapsed, so
+                the columns keep their widths). */}
+            <tr className={`border-y border-line ${editing === presets[0]?.id ? 'collapse' : ''}`}>
               <th className="w-[40%] py-2 pr-4 font-normal sm:w-[30%]">Name</th>
               <th className="hidden w-[68px] py-2 pr-4 font-normal sm:table-cell">Badge</th>
               <th className="py-2 pr-4 font-normal">Headers</th>
@@ -154,7 +156,7 @@ export function Presets({ data }: { data: Data }) {
           <tbody>
             {presets.map((p, i) =>
               editing === p.id ? (
-                <tr key={p.id} className="border-b border-line">
+                <tr key={p.id} className={`border-line ${i ? 'border-b' : 'border-y'}`}>
                   <td colSpan={5}>{editor(p)}</td>
                 </tr>
               ) : (
