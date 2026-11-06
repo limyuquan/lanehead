@@ -28,12 +28,6 @@
   "bin": {
     "lanehead": "dist/lanehead.js"
   },
-  "files": [
-    "dist/lanehead.js",
-    "skill/SKILL.md",
-    "README.md",
-    "LICENSE"
-  ],
   "packageManager": "pnpm@10.0.0",
   "engines": {
     "node": ">=22"
@@ -56,8 +50,7 @@
     "site:dev": "vite --config site/vite.config.ts",
     "site:build": "vite build --config site/vite.config.ts",
     "site:test": "playwright test --config site/playwright.config.ts",
-    "prepare": "wxt prepare",
-    "prepublishOnly": "pnpm build:cli"
+    "prepare": "wxt prepare"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.3",
