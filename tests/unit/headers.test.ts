@@ -3,6 +3,7 @@ import { PALETTE } from '@/core/badge';
 import {
   mergeHeaders,
   parseHeaderLines,
+  splitHeaderLines,
   validateDomains,
   validateHeader,
   validateHeaders,
@@ -68,6 +69,17 @@ describe('parseHeaderLines', () => {
     expect(code(() => parseHeaderLines('x-env lane_a'))).toBe('BAD_HEADER');
     expect(code(() => parseHeaderLines(': value'))).toBe('BAD_HEADER');
     expect(code(() => parseHeaderLines('bad name: 1'))).toBe('BAD_HEADER');
+  });
+});
+
+describe('splitHeaderLines', () => {
+  it('splits pasted lines like parseHeaderLines, without validating', () => {
+    expect(splitHeaderLines("X-Env: lane_a\n\n-H 'x-trace: a:b'\nx-canary\nbad name: 1")).toEqual([
+      { name: 'X-Env', value: ' lane_a' },
+      { name: 'x-trace', value: ' a:b' },
+      { name: 'x-canary', value: '' },
+      { name: 'bad name', value: ' 1' },
+    ]);
   });
 });
 

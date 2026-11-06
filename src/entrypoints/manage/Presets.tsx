@@ -1,8 +1,9 @@
 /** Presets: create, edit, delete, reorder, import and export. */
 import { type FormEvent, useRef, useState } from 'react';
 import { deriveBadge, PALETTE } from '@/core/badge';
-import { parseHeaderLines, validatePreset } from '@/core/headers';
+import { validatePreset } from '@/core/headers';
 import type { Preset } from '@/core/types';
+import { HeaderRows, useDraftRows } from '@/shared/HeaderRows';
 import { call } from '@/shared/messages';
 import { Name } from '@/shared/Name';
 import { focusOnMount, laneStyle, nextColor } from '@/shared/ui';
@@ -238,11 +239,14 @@ function Editor({ preset, color: initialColor, isGlobal, onDone }: EditorProps) 
   const [badge, setBadge] = useState(preset?.badge ?? '');
   const [error, setError] = useState('');
   const [confirming, setConfirming] = useState(false);
+  const draft = useDraftRows(preset?.headers ?? []);
   const id = preset?.id ?? 'new';
 
   const save = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
+    const headers = draft.submit();
+    if (!headers) return setError('');
     try {
       const saved = await call('preset.save', {
         preset: {
@@ -250,7 +254,7 @@ function Editor({ preset, color: initialColor, isGlobal, onDone }: EditorProps) 
           name,
           color,
           badge,
-          headers: parseHeaderLines(String(form.get('headers'))),
+          headers,
           domains: String(form.get('domains'))
             .split(/[\s,]+/)
             .filter(Boolean),
@@ -328,20 +332,14 @@ function Editor({ preset, color: initialColor, isGlobal, onDone }: EditorProps) 
         </div>
       </div>
       <div className={row}>
-        <label htmlFor={`${id}-headers`} className={label}>
+        <span id={`${id}-headers`} className={label}>
           Headers
-        </label>
-        <div>
-          <textarea
-            id={`${id}-headers`}
-            name="headers"
-            rows={Math.max(3, (preset?.headers.length ?? 0) + 1)}
-            className="input block w-full font-mono text-xs leading-5"
-            defaultValue={preset?.headers.map((h) => `${h.name}: ${h.value}`).join('\n')}
-            placeholder={'x-env: feature_login\nx-canary: 1'}
-            spellCheck={false}
-          />
-          <p className="pt-1 text-xs text-muted">One header per line, as name: value.</p>
+        </span>
+        <div className="max-w-[520px]">
+          <HeaderRows label="Headers" {...draft.editor} />
+          <p className="pt-1 text-xs text-muted">
+            Paste name: value lines into a Header field to add several at once.
+          </p>
         </div>
       </div>
       <div className={row}>

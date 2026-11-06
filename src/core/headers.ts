@@ -49,12 +49,9 @@ export function validateHeaders(headers: Header[]): Header[] {
   return out;
 }
 
-/**
- * Pasted `name: value` lines → validated headers. Splits each line on its first `:`; skips blank
- * lines; accepts curl's `-H 'name: value'` form.
- */
-export function parseHeaderLines(text: string): Header[] {
-  const lines = text
+/** Pasted text → its header lines: trimmed, blank lines skipped, curl's `-H '…'` unwrapped. */
+function headerLines(text: string): string[] {
+  return text
     .split(/\r?\n/)
     .map((l) =>
       l
@@ -63,13 +60,31 @@ export function parseHeaderLines(text: string): Header[] {
         .replace(/^(['"])(.*)\1$/, '$2'),
     )
     .filter(Boolean);
-  return validateHeaders(
-    lines.map((line) => {
-      const colon = line.indexOf(':');
-      if (colon < 1) throw new LaneheadError('BAD_HEADER', `Write "${line}" as name: value.`);
-      return { name: line.slice(0, colon), value: line.slice(colon + 1) };
-    }),
-  );
+}
+
+/**
+ * Pasted `name: value` lines → name/value pairs, not validated (the UI's key/value rows check each
+ * one with validateHeader). Splits each line on its first `:`; a line without one is all name.
+ */
+export function splitHeaderLines(text: string): Header[] {
+  return headerLines(text).map((line) => {
+    const colon = line.indexOf(':');
+    return colon < 1
+      ? { name: line, value: '' }
+      : { name: line.slice(0, colon), value: line.slice(colon + 1) };
+  });
+}
+
+/**
+ * Pasted `name: value` lines → validated headers. Splits each line on its first `:`; skips blank
+ * lines; accepts curl's `-H 'name: value'` form.
+ */
+export function parseHeaderLines(text: string): Header[] {
+  for (const line of headerLines(text)) {
+    if (line.indexOf(':') < 1)
+      throw new LaneheadError('BAD_HEADER', `Write "${line}" as name: value.`);
+  }
+  return validateHeaders(splitHeaderLines(text));
 }
 
 /** `base` with `over` on top: same name → `over`'s value in `base`'s position; new names appended. */
