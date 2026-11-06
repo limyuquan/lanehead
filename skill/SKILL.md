@@ -1,6 +1,6 @@
 ---
 name: lanehead
-description: Send custom request headers from one Chrome tab (e.g. x-env to route to a lane, staging or branch backend) with the `lanehead` CLI. Use when testing a backend environment in the browser or asked to set headers for a tab.
+description: Use when testing a backend environment in the browser or asked to set headers for a tab.
 ---
 
 # Lanehead: per-tab request headers
