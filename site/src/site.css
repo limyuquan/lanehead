@@ -792,12 +792,6 @@ html {
   .proof {
     margin-top: 72px;
   }
-  .proof-cap {
-    margin-bottom: 16px;
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--ink-2);
-  }
   @media (min-width: 860px) {
     .proof {
       margin-top: 112px;
