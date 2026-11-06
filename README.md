@@ -5,7 +5,7 @@ them.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/popup-dark.png">
-  <img src="docs/images/popup-light.png" width="380" alt="Lanehead's popup on shop.example.com: the tab is on the feature_checkout lane (x-env: feature_checkout, x-canary: 1) plus an extra x-debug: 1 of its own, with Reload tab offered because the page loaded with other headers">
+  <img src="docs/images/popup-light.png" width="380" alt="Lanehead's popup on shop.example.com: the tab is on the feature_checkout lane (x-env: feature_checkout, x-canary: 1) plus x-debug: 1 set for this tab only (marked "this tab"), with Reload tab offered because the page loaded with other headers">
 </picture>
 
 ## Why
@@ -21,8 +21,11 @@ with a shell do the same.
 
 ## Features
 
-- **Per-tab headers.** A new tab starts with none. Assign a preset, add the tab's own headers, or
-  both (its own headers win on the same name).
+- **Per-tab headers.** A new tab starts with none. Put it on a lane (a preset) from the popup, and
+  edit that lane's headers right there: the edit is saved to the lane, so every tab on it gets it.
+  Agents can also give one tab headers of its own, temporarily, with the CLI (`lanehead set
+  <tab> -H …`); they win on the same name, and the popup shows them marked "this tab", with a ×
+  to remove them.
 - **Presets.** A named, colored set of headers, optionally sent only to some domains
   (`example.com` includes its subdomains). Editing a preset updates every tab that uses it.
 - **Inheritance.** Links, `⌘`-clicks and `window.open` from a tab with headers open in the same

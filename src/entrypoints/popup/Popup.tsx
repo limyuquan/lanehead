@@ -1,8 +1,9 @@
 /**
- * The popup: which lane this tab is on and what it sends, then a fast way to switch lanes.
- * The tab's extra headers and the less common actions are behind two disclosures, both closed
- * when the popup opens. Keys (outside text fields): 1–9 pick a lane, 0 turns the tab off, R or
- * Enter reloads. In the UI a saved preset is a "lane".
+ * The popup: which lane this tab is on and its headers, editable in place (they are the lane's:
+ * every tab on the lane gets an edit), then a fast way to switch lanes. Headers set for this tab
+ * only (by an agent, through the CLI) show read-only under the lane's, each with a ×. The less
+ * common actions are behind a disclosure, closed when the popup opens. Keys (outside text fields):
+ * 1–9 pick a lane, 0 turns the tab off, R or Enter reloads. In the UI a saved preset is a "lane".
  */
 import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { type Browser, browser } from 'wxt/browser';
@@ -45,7 +46,8 @@ type Props = {
 };
 
 /**
- * The own-header rows for `own`, keeping what the user is in the middle of: a row keeps its id
+ * The header rows for `own` (the lane's headers), keeping what the user is in the middle of: a row
+ * keeps its id
  * (and so its focus) while it stands for the same header, an edited row keeps its text, and rows
  * not stored (yet) stay at the end. `sending`: rows whose save is on its way, by row id, with the
  * header sent; they are left as they are (marked saved only when the request succeeds).
@@ -81,12 +83,11 @@ function syncRows(prev: Row[], own: Header[], sending: Map<string, Header>): Row
 
 export function Popup({ initial, standalone }: Props) {
   const [view, setView] = useState(initial);
-  // Error text by place: 'lane', 'save', 'create', or an own-header row id.
+  // Error text by place: 'lane', 'save', 'create', a lane header row's id, or `own:<name>` (a
+  // header of this tab only).
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [savingAs, setSavingAs] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  // Closed whenever the popup opens: what the tab sends is in the summary above it.
-  const [ownOpen, setOwnOpen] = useState(false);
   const reloadButton = useRef<HTMLButtonElement>(null);
   const focusReload = useRef(false);
 
@@ -137,8 +138,6 @@ export function Popup({ initial, standalone }: Props) {
   // Off means "send nothing": with no all-tabs preset that is simply no state at all.
   const choose = (target: Preset | 'off' | 'follow') => {
     focusReload.current = true;
-    // Off drops the extra headers too: nothing left to edit (with no lanes: back to creating one).
-    if (target === 'off') setOwnOpen(false);
     return act('lane', () =>
       target === 'follow' || (target === 'off' && !global)
         ? call('clear', { tab: tab.id })
@@ -187,16 +186,21 @@ export function Popup({ initial, standalone }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  // ---- The tab's own headers, as rows that save themselves. ----
+  // ---- The lane's headers, as rows that save themselves (to the lane). ----
   const sending = useRef(new Map<string, Header>()).current;
-  const ownKey = JSON.stringify(own);
-  const latestOwn = useRef(own);
-  latestOwn.current = own;
-  const [rows, setRows] = useState<Row[]>(() => syncRows([], own, sending));
-  useEffect(
-    () => setRows((prev) => syncRows(prev, JSON.parse(ownKey), sending)),
-    [ownKey, sending],
-  );
+  const laneId = preset?.id ?? null;
+  const laneHeaders = preset?.headers ?? [];
+  const laneKey = JSON.stringify(laneHeaders);
+  const latestLane = useRef(laneHeaders);
+  latestLane.current = laneHeaders;
+  const [rows, setRows] = useState<Row[]>(() => syncRows([], laneHeaders, sending));
+  // Another lane: its own rows (no drafts carried over).
+  const shownLane = useRef(laneId);
+  useEffect(() => {
+    const same = shownLane.current === laneId;
+    shownLane.current = laneId;
+    setRows((prev) => syncRows(same ? prev : [], JSON.parse(laneKey), sending));
+  }, [laneId, laneKey, sending]);
 
   // "Saved" for a moment after a save, read out politely.
   const [status, setStatus] = useState('');
@@ -208,32 +212,28 @@ export function Popup({ initial, standalone }: Props) {
   };
   useEffect(() => () => clearTimeout(statusTimer.current), []);
 
-  // Open the extra headers and put the cursor in one: a header's value, or a row to type into.
-  const [focusOwn, setFocusOwn] = useState<string | null>(null);
-  const editOwn = (name = '') => {
-    setOwnOpen(true);
-    setFocusOwn(name);
+  // Lane writes, one at a time, each made to the lane as stored when it runs (an agent or the
+  // manage page may have changed it since the popup last read it): only the edited header changes.
+  const laneQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const writeLane = (id: string, change: (headers: Header[]) => Header[]) => {
+    const run = laneQueue.current.then(async () => {
+      const stored = (await call('presets', {})).presets.find((p) => p.id === id);
+      if (!stored) throw new Error('This lane was deleted. Pick another one.');
+      await call('preset.save', { preset: { ...stored, headers: change(stored.headers) } });
+    });
+    laneQueue.current = run.catch(() => undefined);
+    return run;
   };
-  useEffect(() => {
-    if (focusOwn === null) return;
-    const panel = document.getElementById('own-panel');
-    const fields = panel?.querySelectorAll<HTMLInputElement>(
-      focusOwn ? `input[aria-label="Value of ${CSS.escape(focusOwn)}"]` : 'input',
-    );
-    (focusOwn ? fields?.[0] : fields?.[Math.max(0, fields.length - 2)])?.focus();
-    setFocusOwn(null);
-  }, [focusOwn]);
 
-  // A tab on the all-tabs preset keeps it when it gets headers of its own (it would lose it).
-  const keepGlobal = tab.global && global ? { preset: global } : {};
   const savedOthers = (except: Row[]) =>
     rows.flatMap((r) => (r.saved && !except.some((e) => e.id === r.id) ? [r.saved] : []));
 
-  // Send only the rows that changed (merged by name): never the whole list, which may be out of
-  // date. A renamed row then clears its old name. A row counts as saved only once the request
-  // succeeded; when it fails the row keeps its text and its error, so Enter or leaving it again
-  // sends it again. Resolves true when every row is valid and saved.
+  // Send only the rows that changed: each replaces the header it stands for (a renamed row keeps
+  // its place), else is added. A row counts as saved only once the request succeeded; when it
+  // fails the row keeps its text and its error, so Enter or leaving it again sends it again.
+  // Resolves true when every row is valid and saved.
   const saveRows = async (changed: Row[]): Promise<boolean> => {
+    if (!laneId) return false;
     const edited = changed.filter((r) => !isBlank(r) && isEdited(r));
     const { headers, errors: bad } = checkRows(edited, savedOthers(changed));
     for (const r of changed) setError(r.id, bad[r.id] ?? null);
@@ -247,14 +247,21 @@ export function Popup({ initial, standalone }: Props) {
       });
     if (!sent.length) return valid.length === edited.length;
     for (const { row, h } of sent) sending.set(row.id, h);
-    const renamed = sent.flatMap(({ row, h }) =>
-      row.saved && row.saved.name !== h.name ? [row.saved.name] : [],
-    );
     const ids = sent.map((s) => s.row.id);
-    const ok = await act(ids[0] ?? 'lane', async () => {
-      await call('set', { tab: tab.id, headers: sent.map((s) => s.h), ...keepGlobal });
-      if (renamed.length) await call('clear', { tab: tab.id, names: renamed });
-    });
+    const ok = await act(ids[0] ?? 'lane', () =>
+      writeLane(laneId, (stored) => {
+        let out = [...stored];
+        for (const { row, h } of sent) {
+          const from = out.findIndex((x) => x.name === (row.saved?.name ?? h.name));
+          let at = from >= 0 ? from : out.findIndex((x) => x.name === h.name);
+          if (at < 0) at = out.push(h) - 1;
+          else out[at] = h;
+          // Renamed onto a name the lane has already (set elsewhere meanwhile): one header.
+          out = out.filter((x, i) => i === at || x.name !== h.name);
+        }
+        return out;
+      }),
+    );
     // A batch (pasted lines) failed as one: every row in it says so.
     if (!ok) {
       setErrors((e) => ({
@@ -277,13 +284,13 @@ export function Popup({ initial, standalone }: Props) {
     }
     for (const { row } of sent) sending.delete(row.id);
     if (ok) flash('Saved');
-    else setRows((rs) => syncRows(rs, latestOwn.current, sending));
+    else setRows((rs) => syncRows(rs, latestLane.current, sending));
     return ok && valid.length === edited.length;
   };
 
   // Enter saves (or reports what is wrong). Leaving a new row saves it only when both its name
   // and value are typed; anything less is a draft, kept without a word. A saved row left
-  // incomplete says what is missing (the tab still sends the saved header; Escape brings it back).
+  // incomplete says what is missing (the lane keeps the saved header; Escape brings it back).
   const rowDone = async (row: Row, how: Done): Promise<boolean> => {
     if (!row.saved && isBlank(row)) return true;
     if (how === 'blur' && !isFilled(row)) {
@@ -306,9 +313,11 @@ export function Popup({ initial, standalone }: Props) {
 
   const removeRow = async (row: Row): Promise<boolean> => {
     setError(row.id, null);
-    if (row.saved) {
+    if (row.saved && laneId) {
       const name = row.saved.name;
-      const ok = await act(row.id, () => call('clear', { tab: tab.id, names: [name] }));
+      const ok = await act(row.id, () =>
+        writeLane(laneId, (stored) => stored.filter((h) => h.name !== name)),
+      );
       if (ok) flash('Removed');
       return ok;
     }
@@ -318,6 +327,10 @@ export function Popup({ initial, standalone }: Props) {
     });
     return true;
   };
+
+  // A header set for this tab only (by an agent): the popup can only take it away.
+  const removeOwn = (name: string) =>
+    act(`own:${name}`, () => call('clear', { tab: tab.id, names: [name] }));
 
   const saveAs = (name: string) =>
     act('save', async () => {
@@ -357,41 +370,7 @@ export function Popup({ initial, standalone }: Props) {
   const hasMore = !!allTabs || !!canOpen || own.length > 0;
   const agentState = AGENT_STATES[agent];
 
-  const ownEditor = (
-    <Disclosure
-      id="own"
-      title="Extra headers for this tab"
-      tooltip={
-        preset || tab.global
-          ? "Sent on top of the lane's headers. A header with the same name replaces the lane's."
-          : undefined
-      }
-      open={ownOpen}
-      onToggle={() => setOwnOpen(!ownOpen)}
-    >
-      <HeaderRows
-        live
-        label="Extra headers for this tab"
-        rows={rows}
-        onRows={setRows}
-        errors={errors}
-        onRowDone={rowDone}
-        // Pasted lines without a value are drafts, like typed ones.
-        onPasted={(pasted) => saveRows(pasted.filter(isFilled))}
-        onRemove={removeRow}
-        onRestored={(row) => setError(row.id, null)}
-        placeholder={{ name: 'x-env', value: 'value' }}
-        status={
-          <p role="status" aria-live="polite" className="text-xs text-muted">
-            {status}
-          </p>
-        }
-      />
-      <p className="pt-1 text-xs text-muted">
-        Enter saves · paste name: value lines to add several.
-      </p>
-    </Disclosure>
-  );
+  const tabOnly = own.length > 0 && <TabOnly headers={own} errors={errors} onRemove={removeOwn} />;
 
   return (
     <main
@@ -418,7 +397,38 @@ export function Popup({ initial, standalone }: Props) {
           {color && <span className={`dot size-[9px]! ${tab.global ? 'hollow' : ''}`} />}
           <LaneTitle tab={tab} preset={preset} lanes={presets.length > 0} />
         </h1>
-        <Sends tab={tab} onEdit={editOwn} />
+        {preset ? (
+          <div className="mt-1.5">
+            <HeaderRows
+              compact
+              live
+              label="Lane headers"
+              rows={rows}
+              onRows={setRows}
+              errors={errors}
+              onRowDone={rowDone}
+              // Pasted lines without a value are drafts, like typed ones.
+              onPasted={(pasted) => saveRows(pasted.filter(isFilled))}
+              onRemove={removeRow}
+              onRestored={(row) => setError(row.id, null)}
+              placeholder={{ name: 'x-env', value: 'value' }}
+              addTitle={`Saved to the lane ${preset.name}; every tab on this lane gets it.`}
+              extra={tabOnly}
+              status={
+                <p role="status" aria-live="polite" className="text-xs text-muted">
+                  {status}
+                </p>
+              }
+            />
+          </div>
+        ) : (
+          tabOnly && <div className="mt-1.5">{tabOnly}</div>
+        )}
+        {tab.domains && (
+          <p className="pt-1 text-xs break-words text-muted">
+            Only sent to {tab.domains.join(', ')}
+          </p>
+        )}
         {tab.lane === 'off' && global && (
           <p className="pt-0.5 text-xs text-muted">Left out of the all-tabs lane.</p>
         )}
@@ -494,16 +504,8 @@ export function Popup({ initial, standalone }: Props) {
         </section>
       )}
 
-      {/* First run: create a lane, or (one click away) headers for just this tab. */}
-      {firstRun && !ownOpen ? (
-        <FirstLane
-          onCreate={createFirst}
-          onJustThisTab={() => editOwn()}
-          error={errorAt('create')}
-        />
-      ) : (
-        ownEditor
-      )}
+      {/* First run: create a lane. */}
+      {firstRun && <FirstLane onCreate={createFirst} error={errorAt('create')} />}
 
       {hasMore && (
         <Disclosure
@@ -607,48 +609,71 @@ function LaneTitle({
 }
 
 /**
- * What the tab sends, once: one line per header; its own ones marked when it also has a lane (the
- * mark opens them for editing). The name column is 40% wide (at least 96px), so values line up
- * between lanes.
+ * Headers set for this tab only (by an agent, through the CLI), read-only in the lane headers'
+ * columns, each marked "this tab" with a × that takes it away. After a removal, focus moves to the
+ * next one's ×, else the previous one's, else "Add header".
  */
-function Sends({ tab, onEdit }: { tab: TabInfo; onEdit: (name: string) => void }) {
-  const headers = Object.entries(tab.headers);
-  if (!headers.length) return null;
-  const mark = tab.lane !== 'custom';
+function TabOnly({
+  headers,
+  errors,
+  onRemove,
+}: {
+  headers: Header[];
+  errors: Record<string, string>;
+  onRemove: (name: string) => Promise<boolean>;
+}) {
+  const list = useRef<HTMLDivElement>(null);
+  const [focusAt, setFocusAt] = useState<number | null>(null);
+  const names = headers.map((h) => h.name).join('\n');
+  useEffect(() => {
+    if (focusAt === null || !names) return;
+    const buttons = list.current?.querySelectorAll<HTMLButtonElement>('.kv-remove');
+    buttons?.[Math.min(focusAt, buttons.length - 1)]?.focus();
+    setFocusAt(null);
+  }, [focusAt, names]);
+  const remove = async (name: string, i: number) => {
+    const add = list.current?.closest('fieldset')?.querySelector<HTMLButtonElement>('.kv-add');
+    if (!(await onRemove(name))) return;
+    if (headers.length > 1) setFocusAt(i);
+    else add?.focus();
+  };
   return (
-    <>
-      <dl
-        aria-label="Sends"
-        className="mt-1.5 grid grid-cols-[minmax(96px,40%)_minmax(0,1fr)_auto] gap-x-4 font-mono text-xs leading-[22px]"
-      >
-        {headers.map(([name, value]) => (
-          <div key={name} className="contents">
-            <dt title={name} className="truncate text-muted">
-              {name}
-            </dt>
-            <dd title={value} className="truncate">
-              {value}
-            </dd>
-            <dd className="font-sans text-[11px]">
-              {mark && tab.own.includes(name) && (
-                <button
-                  type="button"
-                  className="mark"
-                  title="Edit in Extra headers for this tab"
-                  aria-label={`Edit ${name}, a header of this tab`}
-                  onClick={() => onEdit(name)}
-                >
-                  this tab
-                </button>
-              )}
-            </dd>
+    <div ref={list}>
+      {headers.map(({ name, value }, i) => (
+        <fieldset
+          key={name}
+          aria-label={`Header ${name}, this tab only`}
+          title="Set for this tab only (e.g. by an agent)"
+          className="min-w-0"
+        >
+          <div className="kv-grid kv-compact">
+            <span className="kv kv-quiet kv-name kv-static">{name}</span>
+            <span className="kv kv-quiet kv-static flex! items-baseline gap-2">
+              <span className="min-w-0 truncate" title={value}>
+                {value}
+              </span>
+              <span className="shrink-0 font-sans text-[11px] text-muted">this tab</span>
+            </span>
+            <button
+              type="button"
+              aria-label={`Remove ${name} from this tab`}
+              title="Remove from this tab"
+              className="kv-remove"
+              onClick={() => void remove(name, i)}
+            >
+              <svg viewBox="0 0 10 10" width="9" height="9" aria-hidden="true">
+                <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" strokeWidth="1.4" />
+              </svg>
+            </button>
           </div>
-        ))}
-      </dl>
-      {tab.domains && (
-        <p className="pt-1 text-xs break-words text-muted">Only sent to {tab.domains.join(', ')}</p>
-      )}
-    </>
+          {errors[`own:${name}`] && (
+            <p role="alert" className="pt-0.5 pb-1 text-[11px] text-danger">
+              {errors[`own:${name}`]}
+            </p>
+          )}
+        </fieldset>
+      ))}
+    </div>
   );
 }
 
@@ -776,17 +801,11 @@ function SaveAs({
   );
 }
 
-const PasteTip = () => (
-  <p className="text-xs text-muted">Tip: paste name: value lines to add several.</p>
-);
-
 function FirstLane({
   onCreate,
-  onJustThisTab,
   error,
 }: {
   onCreate: (name: string, headers: Header[]) => void;
-  onJustThisTab: () => void;
   error: ReactNode;
 }) {
   const draft = useDraftRows([]);
@@ -817,18 +836,10 @@ function FirstLane({
         spellCheck={false}
       />
       <HeaderRows label="Headers" {...draft.editor} />
-      <div className="pt-1">
-        <PasteTip />
-      </div>
       {error && <div className="pt-1">{error}</div>}
       <button type="submit" className="btn btn-primary mt-3">
         Create and use in this tab
       </button>
-      <p className="pt-3 text-xs">
-        <button type="button" className="link" onClick={onJustThisTab}>
-          Or add headers just for this tab
-        </button>
-      </p>
     </form>
   );
 }

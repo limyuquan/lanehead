@@ -1,7 +1,7 @@
 /**
  * Headers edited as key/value rows: [Name] [Value] [×] per header, then "Add header". The popup
- * (a tab's own headers, saved row by row) and the forms (create a lane, the manage page's preset
- * editor) all use it, so headers are edited the same way everywhere.
+ * (the current lane's headers, saved row by row) and the forms (create a lane, the manage page's
+ * preset editor) all use it, so headers are edited the same way everywhere.
  *
  * Pasting `name: value` lines (one or many, curl `-H` too) into a Name field splits them into
  * rows. Validation is core's (`validateHeader`, `validateHeaders`); `checkRows` maps its errors to
@@ -113,6 +113,15 @@ type Props = {
   /** Accessible name of the whole editor. */
   label: string;
   placeholder?: Header;
+  /**
+   * Rows that read as plain text until hovered or focused, in the popup's name/value columns, with
+   * no column labels.
+   */
+  compact?: boolean;
+  /** Tooltip of "Add header". */
+  addTitle?: string;
+  /** Shown after the rows, before "Add header" (rows the editor does not own). */
+  extra?: ReactNode;
 };
 
 export function HeaderRows({
@@ -127,6 +136,9 @@ export function HeaderRows({
   status,
   label,
   placeholder = { name: 'x-env', value: 'lane_a' },
+  compact = false,
+  addTitle,
+  extra,
 }: Props) {
   const base = useId();
   const fieldId = (row: Row, part: 'name' | 'value') => `${base}${row.id}-${part}`;
@@ -212,10 +224,12 @@ export function HeaderRows({
   return (
     <fieldset aria-label={label} className="min-w-0">
       {/* Visual column labels: each field already has its own accessible name. */}
-      <div aria-hidden="true" className="kv-grid pb-0.5 text-[11px] text-muted">
-        <span className="px-2">Header</span>
-        <span className="px-2">Value</span>
-      </div>
+      {!compact && (
+        <div aria-hidden="true" className="kv-grid pb-0.5 text-[11px] text-muted">
+          <span className="px-2">Header</span>
+          <span className="px-2">Value</span>
+        </div>
+      )}
       {rows.map((row) => {
         const error = errors[row.id];
         const errorId = `${base}${row.id}-error`;
@@ -227,15 +241,15 @@ export function HeaderRows({
             key={row.id}
             aria-label={name ? `Header ${name}` : 'New header'}
             onBlur={(e) => blur(row, e)}
-            className="min-w-0 pb-1"
+            className={`min-w-0 ${compact ? '' : 'pb-1'}`}
           >
-            <div className="kv-grid group">
+            <div className={`group ${compact ? 'kv-grid kv-compact' : 'kv-grid'}`}>
               <input
                 id={fieldId(row, 'name')}
                 aria-label="Header name"
                 aria-invalid={badName || undefined}
                 aria-describedby={error ? errorId : undefined}
-                className="kv"
+                className={compact ? 'kv kv-quiet kv-name' : 'kv'}
                 value={row.name}
                 title={row.name || undefined}
                 placeholder={placeholder.name}
@@ -250,7 +264,7 @@ export function HeaderRows({
                 aria-label={name ? `Value of ${name}` : 'Header value'}
                 aria-invalid={(!!error && !badName) || undefined}
                 aria-describedby={error ? errorId : undefined}
-                className="kv"
+                className={compact ? 'kv kv-quiet' : 'kv'}
                 value={row.value}
                 title={row.value || undefined}
                 placeholder={placeholder.value}
@@ -272,15 +286,26 @@ export function HeaderRows({
               </button>
             </div>
             {error && (
-              <p id={errorId} role="alert" className="px-2 pt-0.5 text-[11px] text-danger">
+              <p
+                id={errorId}
+                role="alert"
+                className={`pt-0.5 text-[11px] text-danger ${compact ? 'pb-1' : 'px-2'}`}
+              >
                 {error}
               </p>
             )}
           </fieldset>
         );
       })}
+      {extra}
       <div className="flex items-center justify-between gap-3">
-        <button ref={addButton} type="button" className="kv-add" onClick={add}>
+        <button
+          ref={addButton}
+          type="button"
+          className={compact ? 'kv-add kv-add-compact' : 'kv-add'}
+          title={addTitle}
+          onClick={add}
+        >
           <span aria-hidden="true">+</span> Add header
         </button>
         {status}

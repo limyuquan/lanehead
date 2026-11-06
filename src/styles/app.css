@@ -271,6 +271,60 @@ input[type="checkbox"] {
   background: var(--color-hover);
 }
 
+/* The popup's lane headers: rows that read like a plain name/value list until hovered or
+   focused. The fields' text lines up with the text around them (the margin takes back the
+   padding and border). */
+.kv-compact {
+  grid-template-columns: minmax(96px, 40%) minmax(0, 1fr) 20px;
+  gap: 0 8px;
+}
+.kv-quiet {
+  display: block;
+  width: calc(100% + 7px);
+  margin-left: -7px;
+  padding: 2px 6px;
+  border-color: transparent;
+}
+.kv-quiet.kv-name {
+  color: var(--color-muted);
+}
+.kv-quiet:hover {
+  border-color: transparent;
+  background: var(--color-hover);
+}
+.kv-quiet:focus {
+  color: var(--color-ink);
+  background: var(--color-bg);
+  border-color: var(--color-focus);
+}
+.kv-quiet[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+/* Read-only rows (a header set for this tab only). */
+.kv-quiet.kv-static,
+.kv-quiet.kv-static:hover {
+  background: transparent;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kv-compact .kv-remove {
+  width: 20px;
+  height: 20px;
+  color: var(--color-faint);
+}
+.kv-compact:hover .kv-remove,
+.kv-compact:focus-within .kv-remove {
+  color: var(--color-muted);
+}
+.kv-compact .kv-remove:hover {
+  color: var(--color-ink);
+}
+.kv-add-compact {
+  margin: 0 0 0 -8px;
+  padding: 1px 8px;
+}
+
 /* A row that opens or closes a part of the popup. */
 .disclosure {
   display: flex;

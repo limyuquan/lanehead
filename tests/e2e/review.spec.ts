@@ -71,7 +71,7 @@ const fresh = (popup: Page) =>
 test('popup, no lanes: create form empty and filled', async ({ context, lh }) => {
   await fakeSites(context);
   const popup = await lh.popup(await cartTab(lh));
-  await shots(popup, '01-no-lanes-create-empty');
+  await shots(popup, '01-first-run-create-empty');
   await popup.getByLabel('Lane name').fill('feature_checkout');
   await popup.getByLabel('Header name').fill('x-env');
   await popup.getByLabel('Value of x-env').fill('feature_checkout');
@@ -79,7 +79,7 @@ test('popup, no lanes: create form empty and filled', async ({ context, lh }) =>
   await popup.getByLabel('Header name').last().fill('x-canary');
   await popup.getByLabel('Value of x-canary').fill('1');
   await popup.getByLabel('Lane name').focus();
-  await shots(popup, '02-no-lanes-create-filled');
+  await shots(popup, '02-first-run-create-filled');
 });
 
 test('popup, lanes but tab off', async ({ context, lh }) => {
@@ -87,10 +87,13 @@ test('popup, lanes but tab off', async ({ context, lh }) => {
   await seed(lh);
   const popup = await lh.popup(await cartTab(lh));
   await expect(popup.getByTestId('lane')).toHaveText('Off');
-  await shots(popup, '03-lanes-tab-off');
+  await shots(popup, '03-off-with-lanes');
 });
 
-test('popup, lane chosen; own headers; row error; More actions', async ({ context, lh }) => {
+test('popup, lane chosen; editing; adding; row error; tab-only header; More', async ({
+  context,
+  lh,
+}) => {
   await fakeSites(context);
   const [checkout] = await seed(lh);
   const tab = await cartTab(lh, checkout.id);
@@ -98,25 +101,29 @@ test('popup, lane chosen; own headers; row error; More actions', async ({ contex
   await fresh(popup);
   await shots(popup, '04-lane-chosen');
 
+  await popup.getByLabel('Value of x-canary').click();
+  await shots(popup, '05-editing-header');
+
+  await popup.getByRole('button', { name: 'Add header', exact: true }).click();
+  await popup.keyboard.type('x-trace');
+  await shots(popup, '06-adding-row');
+
+  await popup.keyboard.type(' id');
+  await popup.keyboard.press('Tab');
+  await popup.keyboard.type('abc');
+  await popup.keyboard.press('Enter');
+  await popup.getByRole('alert').waitFor();
+  await shots(popup, '07-row-validation-error');
+  await popup.getByRole('button', { name: 'Remove x-trace id' }).click();
+
   await lh.api('set', { tab, headers: [{ name: 'x-debug', value: '1' }], reload: true });
   await popup.getByText('this tab', { exact: true }).waitFor();
   await fresh(popup);
-  await shots(popup, '05-lane-own-header-closed');
-  await popup.getByRole('button', { name: 'Edit x-debug, a header of this tab' }).click();
   await blur(popup);
-  await shots(popup, '05b-lane-own-header-open');
+  await shots(popup, '08-tab-only-header');
 
-  await popup.getByRole('button', { name: 'Add header', exact: true }).click();
-  await popup.getByLabel('Header name').last().fill('x trace');
-  await popup.getByLabel('Value of x trace').fill('abc');
-  await popup.getByLabel('Value of x trace').press('Enter');
-  await popup.getByRole('alert').waitFor();
-  await shots(popup, '06-row-validation-error');
-
-  await popup.getByRole('button', { name: 'Remove x trace' }).click();
-  await popup.getByRole('button', { name: 'Extra headers for this tab' }).click();
   await popup.getByRole('button', { name: 'More actions' }).click();
-  await shots(popup, '08-more-open');
+  await shots(popup, '10-more-open');
 });
 
 test('popup, stale tab', async ({ context, lh }) => {
@@ -126,7 +133,7 @@ test('popup, stale tab', async ({ context, lh }) => {
   await lh.api('set', { tab, preset: search.id });
   const popup = await lh.popup(tab);
   await popup.getByRole('button', { name: 'Reload tab' }).waitFor();
-  await shots(popup, '07-stale-tab');
+  await shots(popup, '09-stale-tab');
 });
 
 test('manage, lane editor', async ({ context, lh }) => {
@@ -138,7 +145,7 @@ test('manage, lane editor', async ({ context, lh }) => {
   await page.getByRole('button', { name: 'Edit feature_checkout' }).click();
   for (const scheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: scheme });
-    await page.screenshot({ path: path.join(dir, `09-manage-lane-editor-${scheme}.png`) });
+    await page.screenshot({ path: path.join(dir, `11-manage-lane-editor-${scheme}.png`) });
   }
 });
 
@@ -150,7 +157,7 @@ test('popup, turned off from a lane (title Off)', async ({ context, lh }) => {
   await popup.keyboard.press('0');
   await expect(popup.getByTestId('lane')).toHaveText('Off');
   await blur(popup);
-  await shots(popup, '10-tab-off-with-lanes');
+  await shots(popup, '12-turned-off-from-lane');
 });
 
 test('popup, custom headers and no lanes', async ({ context, lh }) => {
@@ -167,22 +174,7 @@ test('popup, custom headers and no lanes', async ({ context, lh }) => {
   const popup = await lh.popup(tab);
   await expect(popup.getByTestId('lane')).toHaveText('Custom headers');
   await fresh(popup);
-  await shots(popup, '11-custom-only-no-lanes');
-});
-
-test('popup, draft row', async ({ context, lh }) => {
-  await fakeSites(context);
-  const [checkout] = await seed(lh);
-  const tab = await cartTab(lh, checkout.id);
-  await lh.api('set', { tab, headers: [{ name: 'x-debug', value: '1' }], reload: true });
-  const popup = await lh.popup(tab);
-  await fresh(popup);
-  await popup.getByRole('button', { name: 'Extra headers for this tab' }).click();
-  await popup.getByRole('button', { name: 'Add header', exact: true }).click();
-  await popup.getByLabel('Header name').last().fill('x-trace');
-  await blur(popup);
-  await expect(popup.getByRole('alert')).toHaveCount(0);
-  await shots(popup, '12-draft-row');
+  await shots(popup, '13-custom-only-no-lanes');
 });
 
 test('popup, all-tabs mode on', async ({ context, lh }) => {
@@ -193,5 +185,5 @@ test('popup, all-tabs mode on', async ({ context, lh }) => {
   const popup = await lh.popup(tab);
   await expect(popup.getByTestId('lane')).toHaveText('All tabs: staging');
   await fresh(popup);
-  await shots(popup, '13-all-tabs-on');
+  await shots(popup, '14-all-tabs-on');
 });
