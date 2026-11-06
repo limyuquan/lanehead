@@ -1,0 +1,70 @@
+# Builds the website (site/) and publishes it to GitHub Pages.
+#
+# Runs on pushes to main that touch the site, the extension code its demo embeds (the real popup
+# and service worker code), the CLI parser its terminal uses, or the media it shows; and by hand
+# (Actions → "Website" → Run workflow). Pages must be set to "Source: GitHub Actions".
+#
+# SITE_BASE is the path the site is served under: `/lanehead/` for
+# https://limyuquan.github.io/lanehead/, or `/` with a custom domain (then also set SITE_URL and
+# add site/public/CNAME).
+name: Website
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - src/entrypoints/popup/**
+      - src/background/**
+      - src/shared/**
+      - src/core/**
+      - src/styles/**
+      - cli/args.ts
+      - cli/format.ts
+      - docs/media/**
+      - public/icon/**
+      - .github/workflows/site.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      SITE_BASE: /lanehead/
+      SITE_URL: https://limyuquan.github.io/lanehead/
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm site:build
+      - name: Install Chromium for Playwright
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Smoke test (headless)
+        run: pnpm site:test
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

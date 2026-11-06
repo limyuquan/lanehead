@@ -46,7 +46,7 @@
     "zip:store": "wxt zip --mode store",
     "build:cli": "esbuild cli/main.ts --bundle --platform=node --format=esm --target=node22 --loader:.md=text --banner:js='#!/usr/bin/env node' --outfile=dist/lanehead.js && chmod +x dist/lanehead.js",
     "icons": "node scripts/icons.mjs",
-    "typecheck": "wxt prepare && tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.cli.json",
+    "typecheck": "wxt prepare && tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.cli.json && tsc --noEmit -p site/tsconfig.json",
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "vitest run",
@@ -55,6 +55,7 @@
     "media": "LANEHEAD_MEDIA=1 pnpm build:e2e && pnpm build:cli && LANEHEAD_MEDIA=1 playwright test --config scripts/media/playwright.config.ts",
     "site:dev": "vite --config site/vite.config.ts",
     "site:build": "vite build --config site/vite.config.ts",
+    "site:test": "playwright test --config site/playwright.config.ts",
     "prepare": "wxt prepare",
     "prepublishOnly": "pnpm build:cli"
   },

@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Lanehead: every tab, its own backend</title>
+    <meta
+      name="description"
+      content="A free, open-source Chrome extension that gives each tab its own request headers. One tab on x-env: lane_a, the next on lane_b. Your coding agent can switch them too."
+    />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#14130f" />
+    <link rel="canonical" href="%SITE_URL%" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Lanehead" />
+    <meta property="og:title" content="Lanehead: every tab, its own backend" />
+    <meta
+      property="og:description"
+      content="Per-tab request headers for Chrome. Put each tab in its own lane, and let your coding agent switch them. Free and open source."
+    />
+    <meta property="og:url" content="%SITE_URL%" />
+    <meta property="og:image" content="%SITE_URL%og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Lanehead: two browser tabs of the same site, each sending a different x-env header, over a misty painted landscape."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icon/32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icon/16.png" />
+    <link rel="apple-touch-icon" href="/icon/128.png" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Lanehead",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Chrome",
+        "description": "Per-tab request headers for Chrome, with a CLI so coding agents can put a tab in a lane.",
+        "license": "https://opensource.org/licenses/MIT",
+        "codeRepository": "https://github.com/limyuquan/lanehead",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <script type="module" src="./src/main.tsx"></script>
+  </head>
+  <body>
+    <a class="skip" href="#try">Skip to the demo</a>
+
+    <header class="top" id="top">
+      <div class="wrap top-row">
+        <a class="brand" href="#top" aria-label="Lanehead, back to top">
+          <img src="/icon/48.png" alt="" width="20" height="20" />
+          <span>Lanehead</span>
+        </a>
+        <nav class="links" aria-label="Sections">
+          <a href="#try">Try it</a>
+          <a href="#agents">Agents</a>
+          <a href="#install">Install</a>
+          <a href="https://github.com/limyuquan/lanehead">GitHub</a>
+        </nav>
+        <a class="pill pill-light pill-sm" href="https://github.com/limyuquan/lanehead/releases/latest">
+          Download
+        </a>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero wrap" aria-labelledby="hero-title">
+        <h1 id="hero-title">Every tab, its own backend.</h1>
+        <p class="hero-sub">
+          Lanehead gives each Chrome tab its own request headers. Put one tab on
+          <code>x-env: lane_a</code> and the next on <code>lane_b</code>, side by side. Your coding
+          agent can switch them too.
+        </p>
+        <div class="actions">
+          <a class="pill pill-light" href="https://github.com/limyuquan/lanehead/releases/latest">
+            Download for Chrome
+            <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+              <path d="M6 1.5v8M2.5 6l3.5 3.5L9.5 6M2 11h8" fill="none" stroke="currentColor" stroke-width="1.3" />
+            </svg>
+          </a>
+          <a class="pill pill-dark" href="#try">Try it <span aria-hidden="true">↓</span></a>
+        </div>
+        <p class="hero-fine">Free and open source. No account, no network calls.</p>
+
+        <div class="paint paint-hero">
+          <figure class="win media-win" data-media-frame style="--cx: 58; --cy: 48">
+            <video
+              class="media"
+              data-src="/media/hero"
+              poster="/media/hero.png"
+              muted
+              loop
+              playsinline
+              preload="none"
+              width="1600"
+              height="1000"
+              aria-label="Two tabs of the same site at once: one on the feature_checkout lane, the other on feature_search. Each page shows the x-env header it received, and Lanehead's popup shows each tab's lane."
+            ></video>
+          </figure>
+        </div>
+      </section>
+
+      <section class="section wrap" id="try" aria-labelledby="try-title">
+        <div class="lede">
+          <h2 id="try-title">Try it here.</h2>
+          <p>
+            This is Lanehead's real popup and its real header logic, running in this page. Switch
+            tabs, pick a lane, reload. Or type a <code>lanehead</code> command, like an agent would.
+          </p>
+        </div>
+        <div id="demo-root"></div>
+      </section>
+
+      <section class="section wrap split" id="agents" aria-labelledby="agents-title">
+        <div class="split-text">
+          <div class="lede">
+            <h2 id="agents-title">Your agent picks the lane.</h2>
+            <p>
+              One command puts a tab in a lane, then the agent navigates. Every command prints one
+              line of JSON.
+            </p>
+          </div>
+          <pre class="code"><span class="dim">$</span> lanehead set 1842 -H 'x-env: lane_a'
+<span class="dim">{"id":1842,"lane":"custom","headers":{"x-env":"lane_a"}}</span></pre>
+          <dl class="facts">
+            <div>
+              <dt>Claude Code, Codex, any shell</dt>
+              <dd><code>lanehead skill --install</code> teaches them the commands.</dd>
+            </div>
+            <div>
+              <dt>Claude in Chrome</dt>
+              <dd>Its tab ids are real Chrome tab ids: set the tab, wait, then navigate.</dd>
+            </div>
+            <div>
+              <dt>Browser-only agents</dt>
+              <dd>A plain control page on <code>127.0.0.1</code>, filled in like any form.</dd>
+            </div>
+          </dl>
+          <a class="more" href="https://github.com/limyuquan/lanehead/blob/main/docs/AGENTS.md">How agent control works →</a>
+        </div>
+        <div class="paint paint-side">
+          <figure class="win media-win" data-media-frame style="--cx: 48; --cy: 48">
+            <video
+              class="media"
+              data-src="/media/agent"
+              poster="/media/agent.png"
+              muted
+              loop
+              playsinline
+              preload="none"
+              width="1600"
+              height="1000"
+              aria-label="A terminal runs lanehead tabs and lanehead set; the browser tab next to it switches lane and reloads with the new header."
+            ></video>
+          </figure>
+        </div>
+      </section>
+
+      <section class="section wrap split split-flip" aria-labelledby="switch-title">
+        <div class="split-text">
+          <div class="lede">
+            <h2 id="switch-title">Switch in a keystroke.</h2>
+            <p>
+              Open the popup with <kbd>Alt</kbd><kbd>Shift</kbd><kbd>H</kbd>, press
+              <kbd>1</kbd>–<kbd>9</kbd> for a lane, <kbd>R</kbd> to reload. The toolbar badge shows
+              each tab's lane in its color.
+            </p>
+          </div>
+        </div>
+        <div class="paint paint-side paint-shift">
+          <figure class="win media-win" data-media-frame style="--cx: 58; --cy: 48">
+            <video
+              class="media"
+              data-src="/media/switch"
+              poster="/media/switch.png"
+              muted
+              loop
+              playsinline
+              preload="none"
+              width="1600"
+              height="1000"
+              aria-label="In Lanehead's popup, a key press switches the tab to another lane; the popup offers Reload tab, and after the reload the page shows the new header."
+            ></video>
+          </figure>
+        </div>
+      </section>
+
+      <section class="section wrap split" aria-labelledby="edit-title">
+        <div class="split-text">
+          <div class="lede">
+            <h2 id="edit-title">Edit a lane once, every tab follows.</h2>
+            <p>
+              A lane is a named set of headers. Add or change one right in the popup; every tab on
+              that lane sends it from the next request.
+            </p>
+          </div>
+        </div>
+        <div class="paint paint-side paint-shift-2">
+          <figure class="win media-win" data-media-frame style="--cx: 58; --cy: 48">
+            <video
+              class="media"
+              data-src="/media/edit"
+              poster="/media/edit.png"
+              muted
+              loop
+              playsinline
+              preload="none"
+              width="1600"
+              height="1000"
+              aria-label="In Lanehead's popup, Add header, then a name and a value are typed and saved to the lane."
+            ></video>
+          </figure>
+        </div>
+      </section>
+
+      <section class="section wrap" aria-label="Details">
+        <div class="trio">
+          <div>
+            <h3>Isolated by default</h3>
+            <p>
+              A new tab sends nothing extra. Only the tabs you put in a lane send its headers, so
+              the rest of your browsing is untouched.
+            </p>
+          </div>
+          <div>
+            <h3>Opened tabs inherit</h3>
+            <p>
+              Links, <kbd>⌘</kbd>-clicks and <code>window.open</code> from a tab in a lane open in the
+              same lane. You can turn that off.
+            </p>
+          </div>
+          <div>
+            <h3>Stays on your machine</h3>
+            <p>
+              No account, no telemetry, no network requests. Chrome's own
+              <code>declarativeNetRequest</code> rules add the headers; nothing reads your traffic.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section wrap install" id="install" aria-labelledby="install-title">
+        <div class="lede">
+          <h2 id="install-title">Install.</h2>
+          <p>Lanehead isn't on the Chrome Web Store. You load it from GitHub, in a minute.</p>
+        </div>
+        <ol class="steps">
+          <li>
+            <span class="step-n" aria-hidden="true">1</span>
+            <div>
+              <p class="step-t">Download</p>
+              <p>
+                Get <code>lanehead-chrome.zip</code> from the
+                <a href="https://github.com/limyuquan/lanehead/releases/latest">latest release</a> and
+                unzip it somewhere it can stay.
+              </p>
+            </div>
+          </li>
+          <li>
+            <span class="step-n" aria-hidden="true">2</span>
+            <div>
+              <p class="step-t">Load unpacked</p>
+              <p>
+                Open <code>chrome://extensions</code>, turn on Developer mode, click Load unpacked and
+                pick the folder.
+              </p>
+            </div>
+          </li>
+          <li>
+            <span class="step-n" aria-hidden="true">3</span>
+            <div>
+              <p class="step-t">Pin it</p>
+              <p>Pin Lanehead to the toolbar, open it on any tab, and create your first lane.</p>
+            </div>
+          </li>
+        </ol>
+        <p class="agent-line">
+          <span class="dim">Using an agent?</span> Tell it:
+          <code class="say">Set up Lanehead from github.com/limyuquan/lanehead</code>
+          <a href="https://github.com/limyuquan/lanehead#for-llms">Instructions it follows →</a>
+        </p>
+        <div class="actions">
+          <a class="pill pill-light" href="https://github.com/limyuquan/lanehead/releases/latest">Download latest release</a>
+          <a class="pill pill-dark" href="https://github.com/limyuquan/lanehead#readme">Read the README</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <div class="wrap foot-row">
+        <p>
+          <span class="brand-sm">Lanehead</span>
+          <span class="dim">MIT License</span>
+          <a href="https://github.com/limyuquan/lanehead">GitHub</a>
+        </p>
+        <p class="credit">
+          Painting: John Henry Twachtman,
+          <a href="https://www.metmuseum.org/art/collection/search/12842"><cite>Arques-la-Bataille</cite></a>,
+          1885. The Metropolitan Museum of Art, public domain.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

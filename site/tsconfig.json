@@ -1,0 +1,10 @@
+{
+  // The website (site/): the landing page and its demo, which compiles the extension's real popup
+  // and service worker code from src/ and the CLI's parser from cli/. Node types for the configs,
+  // the e2e test and cli/args.ts (whose `node:util` the build swaps for src/demo/parseArgs.ts).
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node"]
+  },
+  "include": ["../.wxt/wxt.d.ts", "src", "e2e", "*.config.ts", "scripts"]
+}

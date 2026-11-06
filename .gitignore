@@ -10,3 +10,6 @@ blob-report/
 
 # local agent skills
 .claude/skills/council/
+
+# website build (pnpm site:build)
+site/dist/
