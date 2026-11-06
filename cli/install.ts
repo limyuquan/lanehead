@@ -12,7 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { EXTENSION_ID, HOST_NAME } from '../src/shared/ids';
-import { type BrowserName, CliError } from './args';
+import { BROWSERS, type BrowserName, CliError } from './args';
 import { hint, type Instance, instances, live } from './client';
 import { home, hostScript } from './home';
 
@@ -24,6 +24,17 @@ const DATA_DIRS: Record<BrowserName, [string, string]> = {
   brave: ['BraveSoftware/Brave-Browser', 'BraveSoftware/Brave-Browser'],
   cft: ['Google/ChromeForTesting', 'google-chrome-for-testing'],
 };
+
+/** The browser's per-user data dir on this system. */
+function dataDirOf(browser: BrowserName): string {
+  const [mac, linux] = DATA_DIRS[browser];
+  return process.platform === 'darwin'
+    ? path.join(os.homedir(), 'Library', 'Application Support', mac)
+    : path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), linux);
+}
+
+const manifestIn = (dataDir: string) =>
+  path.join(dataDir, 'NativeMessagingHosts', `${HOST_NAME}.json`);
 
 /** Marks files install writes, so nothing else is overwritten or removed. */
 const MARK = '# Written by `lanehead install`.';
@@ -58,6 +69,8 @@ export async function install(opts: {
   browser: BrowserName;
   userDataDir?: string;
   extensionIds: string[];
+  /** Don't wait for a new browser to connect. */
+  noWait?: boolean;
 }): Promise<{ manifest: string; shim: string | null; instances: Instance[]; hint?: string }> {
   if (process.platform === 'win32') {
     const message = 'Agent control needs macOS or Linux; on Windows, use the Lanehead popup.';
@@ -71,13 +84,8 @@ export async function install(opts: {
   const wrapper = wrapperPath();
   writeFileSync(wrapper, launcher('host'), { mode: 0o755 });
 
-  const [mac, linux] = DATA_DIRS[opts.browser];
-  const dataDir = opts.userDataDir
-    ? path.resolve(opts.userDataDir)
-    : process.platform === 'darwin'
-      ? path.join(os.homedir(), 'Library', 'Application Support', mac)
-      : path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), linux);
-  const manifest = path.join(dataDir, 'NativeMessagingHosts', `${HOST_NAME}.json`);
+  const dataDir = opts.userDataDir ? path.resolve(opts.userDataDir) : dataDirOf(opts.browser);
+  const manifest = manifestIn(dataDir);
   mkdirSync(path.dirname(manifest), { recursive: true });
   const origins = [...new Set([EXTENSION_ID, ...opts.extensionIds])].map(
     (id) => `chrome-extension://${id}/`,
@@ -109,8 +117,8 @@ export async function install(opts: {
   );
 
   // The browser retries every 30 s, so a running one connects within that: wait for a browser
-  // that was not connected before.
-  const deadline = Date.now() + 35_000;
+  // that was not connected before (unless told not to).
+  const deadline = opts.noWait ? 0 : Date.now() + 35_000;
   const fresh = (list: Instance[]) => list.some((i) => !before.has(i.instance));
   let found = await instances();
   while (!fresh(found) && Date.now() < deadline) {
@@ -119,7 +127,8 @@ export async function install(opts: {
   }
   const hints = [
     !placed && `For a \`lanehead\` command, create ${bin}, add it to PATH, and rerun install.`,
-    !fresh(found) && hint('No new browser is'),
+    // With --no-wait, a browser that was already connected is enough.
+    !fresh(found) && !(opts.noWait && found.length) && hint('No new browser is'),
   ].filter(Boolean);
   return {
     manifest,
@@ -130,6 +139,27 @@ export async function install(opts: {
 }
 
 const wrapperPath = () => path.join(home(), 'host', 'lanehead-host');
+
+/** Whether `file` is a native host manifest naming our host and wrapper. */
+const ourManifest = (file: string) =>
+  holds(file, (text) => {
+    const { name, path: host } = JSON.parse(text);
+    return name === HOST_NAME && host === wrapperPath();
+  });
+
+/**
+ * Whether the bridge is registered: a manifest in a supported browser's per-user dir, or one
+ * install recorded (`--user-data-dir`), names our host, and the host script is there.
+ */
+export function installed(): boolean {
+  if (!existsSync(hostScript())) return false;
+  let recorded: string[] = [];
+  try {
+    recorded = readRecord().manifests;
+  } catch {}
+  const defaults = BROWSERS.map((b) => manifestIn(dataDirOf(b)));
+  return [...defaults, ...recorded].some(ourManifest);
+}
 
 /** Whether `file` is a file whose text passes `test`. */
 function holds(file: string, test: (text: string) => boolean): boolean {
@@ -148,12 +178,7 @@ function holds(file: string, test: (text: string) => boolean): boolean {
 export function uninstall(): { removed: string[] } {
   const { manifests, shim } = readRecord();
   const ours = [
-    ...manifests.filter((f) =>
-      holds(f, (text) => {
-        const { name, path: host } = JSON.parse(text);
-        return name === HOST_NAME && host === wrapperPath();
-      }),
-    ),
+    ...manifests.filter(ourManifest),
     ...(shim && holds(shim, (text) => text.includes(MARK) && text.includes(hostScript()))
       ? [shim]
       : []),

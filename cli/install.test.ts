@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { HOST_NAME } from '../src/shared/ids';
-import { uninstall } from './install';
+import { install, installed, uninstall } from './install';
 
 // A scratch LANEHEAD_HOME with what install writes, and files beside it that are not ours.
 let dir: string;
@@ -16,15 +16,19 @@ const write = (file: string, text: string) => {
 const manifest = (file: string, host: string, name = HOST_NAME) =>
   write(file, JSON.stringify({ name, path: host }));
 
+const realHome = process.env.HOME;
 beforeEach(() => {
   dir = mkdtempSync(path.join(os.tmpdir(), 'lh-uninstall-'));
   home = path.join(dir, 'home');
   process.env.LANEHEAD_HOME = home;
+  // The browsers' per-user dirs live under HOME: never the real one.
+  process.env.HOME = path.join(dir, 'user');
   write(path.join(home, 'host', 'lanehead.js'), '// host');
   write(path.join(home, 'host', 'lanehead-host'), '#!/bin/sh');
 });
 afterEach(() => {
   delete process.env.LANEHEAD_HOME;
+  process.env.HOME = realHome;
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -60,5 +64,56 @@ describe('uninstall', () => {
     write(path.join(home, 'install.json'), JSON.stringify({ manifests: [], shim }));
     expect(uninstall()).toEqual({ removed: [path.join(home, 'host')] });
     expect(readFileSync(shim, 'utf8')).toContain('echo mine');
+  });
+});
+
+describe('installed', () => {
+  const wrapper = () => path.join(home, 'host', 'lanehead-host');
+  const chromeDir = () =>
+    process.platform === 'darwin'
+      ? path.join(dir, 'user', 'Library', 'Application Support', 'Google', 'Chrome')
+      : path.join(dir, 'user', '.config', 'google-chrome');
+
+  it('is false with no manifest, or one that names another host', () => {
+    expect(installed()).toBe(false);
+    manifest(path.join(chromeDir(), 'NativeMessagingHosts', `${HOST_NAME}.json`), '/elsewhere');
+    expect(installed()).toBe(false);
+  });
+
+  it("is true when a browser's manifest names our wrapper, until the host is gone", () => {
+    manifest(path.join(chromeDir(), 'NativeMessagingHosts', `${HOST_NAME}.json`), wrapper());
+    expect(installed()).toBe(true);
+    rmSync(path.join(home, 'host'), { recursive: true });
+    expect(installed()).toBe(false);
+  });
+
+  it('finds a manifest install recorded for a custom --user-data-dir', () => {
+    const custom = manifest(
+      path.join(dir, 'p', 'NativeMessagingHosts', `${HOST_NAME}.json`),
+      wrapper(),
+    );
+    expect(installed()).toBe(false);
+    write(path.join(home, 'install.json'), JSON.stringify({ manifests: [custom] }));
+    expect(installed()).toBe(true);
+  });
+});
+
+describe('install --no-wait', () => {
+  it('registers and returns at once with the no-browser hint', async () => {
+    const started = Date.now();
+    const out = await install({
+      browser: 'chromium',
+      userDataDir: path.join(dir, 'profile'),
+      extensionIds: [],
+      noWait: true,
+    });
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(out).toEqual({
+      manifest: path.join(dir, 'profile', 'NativeMessagingHosts', `${HOST_NAME}.json`),
+      shim: null,
+      instances: [],
+      hint: expect.stringContaining('No new browser is connected'),
+    });
+    expect(installed()).toBe(true);
   });
 });

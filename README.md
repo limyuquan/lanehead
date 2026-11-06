@@ -126,12 +126,13 @@ lanehead status                                         # which browsers are con
 |---|---|---|
 | Neither the command nor the file | Not installed | Section 2 |
 | No `lanehead` on PATH, but the file exists | Installed, no launcher | Use `node ~/.lanehead/host/lanehead.js` wherever this says `lanehead` |
-| `{"instances":[{…}]}` | Ready | Section 4 |
-| ``{"instances":[],"hint":"…run `lanehead install`…"}`` | Bridge not registered | Section 2 |
-| `{"instances":[],"hint":"…ask the user…"}` | Bridge installed, no browser connected | Section 3 |
+| `{"installed":true,"instances":[{…}]}` | Ready | Section 4 |
+| `{"installed":false,"instances":[],"hint":…}` | Bridge not registered | Section 2 |
+| `{"installed":true,"instances":[],"hint":…}` | Bridge installed, no browser connected | Section 3 |
 
-`status` exits 0 whenever it runs. Each instance has `instance`, `label`, `browser`, `version`
-(the extension's), `ui` (the control page) and `active` (the focused tab). Compare `version` with
+`status` exits 0 whenever it runs. `installed` says whether the bridge is registered. Each
+instance has `instance`, `label`, `browser`, `version` (the extension's), `ui` (the control page)
+and `active` (the focused tab). Compare `version` with
 `~/.lanehead/extension/manifest.json`: if the folder is newer, the person still has to click ↻.
 
 ### 2. Install it
@@ -152,7 +153,7 @@ in `SHA256SUMS`. The script is idempotent and:
    in whole as `~/.lanehead/extension` (it refuses to replace a folder that isn't Lanehead's);
 3. runs `lanehead install`: copies the CLI to `~/.lanehead/host/`, registers the native messaging
    host with Chrome, and puts a `lanehead` launcher in `~/.local/bin` when that is on `PATH`.
-   It waits up to 35 s for a browser to connect, so the script takes about 40 s;
+   It doesn't wait for a browser (`lanehead install` alone waits up to 35 s; `--no-wait` skips that);
 4. runs `lanehead skill --install` (skip with `LANEHEAD_NO_SKILL=1`);
 5. prints what it wrote and the step left for the person.
 

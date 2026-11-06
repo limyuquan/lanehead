@@ -11,7 +11,7 @@ import { LaneheadError } from '../src/core/types';
 import { CliError, type Command, HELP, parse } from './args';
 import { hint, instances, runOp } from './client';
 import { host } from './host';
-import { install, installSkill, uninstall } from './install';
+import { install, installed, installSkill, uninstall } from './install';
 
 async function run(cmd: Command): Promise<unknown> {
   switch (cmd.kind) {
@@ -19,7 +19,8 @@ async function run(cmd: Command): Promise<unknown> {
       return runOp(cmd);
     case 'status': {
       const found = await instances();
-      return found.length ? { instances: found } : { instances: found, hint: hint() };
+      const base = { installed: installed(), instances: found };
+      return found.length ? base : { ...base, hint: hint() };
     }
     case 'install':
       return install(cmd);

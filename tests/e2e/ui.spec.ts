@@ -819,7 +819,11 @@ test('manage: agents shows the bridge state, instance and an editable label', as
       off: 'Off',
     }[agent],
   );
-  await expect(page.getByText('npm i -g lanehead && lanehead install')).toBeVisible();
+  await expect(
+    page.getByText(
+      'curl -fsSL https://github.com/limyuquan/lanehead/releases/latest/download/install.sh | sh',
+    ),
+  ).toBeVisible();
 
   await page.getByLabel('Label').fill('Work Chrome');
   await page.getByLabel('Label').press('Enter');

@@ -21,7 +21,13 @@ export type BrowserName = (typeof BROWSERS)[number];
 export type Command = { instance?: string; pretty: boolean } & (
   | { kind: 'op'; op: Op; args: object; timeout: number }
   | { kind: 'status' | 'uninstall' | 'help' }
-  | { kind: 'install'; browser: BrowserName; userDataDir?: string; extensionIds: string[] }
+  | {
+      kind: 'install';
+      browser: BrowserName;
+      userDataDir?: string;
+      extensionIds: string[];
+      noWait: boolean;
+    }
   | { kind: 'skill'; install: boolean }
 );
 
@@ -41,6 +47,7 @@ const OPTIONS = {
   'user-data-dir': { type: 'string' },
   'extension-id': { type: 'string', multiple: true },
   install: { type: 'boolean' },
+  'no-wait': { type: 'boolean' },
 } as const;
 const COMMON = ['instance', 'pretty', 'help'];
 
@@ -66,8 +73,8 @@ const SPECS: Record<string, [usage: string, options: string[], min: number, max:
   global: ['global [<preset>|off]', [], 0, 1],
   status: ['status', [], 0, 0],
   install: [
-    `install [--browser ${BROWSERS.join('|')}] [--user-data-dir <dir>] [--extension-id <id>]`,
-    ['browser', 'user-data-dir', 'extension-id'],
+    `install [--browser ${BROWSERS.join('|')}] [--user-data-dir <dir>] [--extension-id <id>] [--no-wait]`,
+    ['browser', 'user-data-dir', 'extension-id', 'no-wait'],
     0,
     0,
   ],
@@ -207,6 +214,7 @@ export function parse(argv: string[]): Command {
         kind: 'install',
         browser,
         extensionIds,
+        noWait: !!v['no-wait'],
         ...(userDataDir !== undefined && { userDataDir }),
       };
     }

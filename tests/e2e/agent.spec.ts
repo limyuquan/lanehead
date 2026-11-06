@@ -119,7 +119,10 @@ test('install waits for the browser; status and tabs', async ({ agent, lh }) => 
       hint: expect.stringContaining('PATH'),
     },
   });
-  expect(await agent.cli('status')).toEqual({ code: 0, out: { instances: [instance] } });
+  expect(await agent.cli('status')).toEqual({
+    code: 0,
+    out: { installed: true, instances: [instance] },
+  });
   expect(await lh.api('status', {})).toMatchObject({ agent: 'connected' });
 
   const page = await lh.open(lh.url('t'));
@@ -388,6 +391,12 @@ test('agent control off and on; no host after uninstall', async ({ agent, lh }) 
   await lh.api('settings', { patch: { agentControl: false } });
   await waitForInstances(agent, 0);
   expect(await lh.api('status', {})).toMatchObject({ agent: 'off' });
+  // Registered, but no browser connected.
+  expect((await agent.cli('status')).out).toEqual({
+    installed: true,
+    instances: [],
+    hint: expect.stringContaining('ask the user'),
+  });
   expect(await agent.cli('tabs')).toMatchObject({
     code: 3,
     out: { error: { code: 'NOT_CONNECTED', message: expect.stringContaining('agent control') } },
@@ -402,6 +411,7 @@ test('agent control off and on; no host after uninstall', async ({ agent, lh }) 
   await agent.killHosts();
   await expect.poll(async () => (await lh.api('status', {})).agent).toBe('no-host');
   expect((await agent.cli('status')).out).toEqual({
+    installed: false,
     instances: [],
     hint: expect.stringContaining('lanehead install'),
   });

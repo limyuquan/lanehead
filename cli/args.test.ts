@@ -113,7 +113,10 @@ describe('parse', () => {
       browser: 'chrome',
       userDataDir: '/p',
       extensionIds: ['a'.repeat(32)],
+      noWait: false,
     });
+    expect(parse(['install', '--no-wait'])).toMatchObject({ kind: 'install', noWait: true });
+    expect(() => parse(['status', '--no-wait'])).toThrow(/status takes no --no-wait/);
   });
 });
 

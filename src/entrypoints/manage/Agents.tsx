@@ -5,7 +5,8 @@ import { REPO_URL } from '@/shared/ids';
 import { call } from '@/shared/messages';
 import { type Data, SectionHead } from './Manage';
 
-const INSTALL = 'npm i -g lanehead && lanehead install';
+const INSTALL =
+  'curl -fsSL https://github.com/limyuquan/lanehead/releases/latest/download/install.sh | sh';
 
 export function Agents({ data }: { data: Data }) {
   const { status, settings } = data;
@@ -60,8 +61,8 @@ export function Agents({ data }: { data: Data }) {
         <div className={row}>
           <dt className="text-muted">Install</dt>
           <dd>
-            <div className="flex items-center gap-3">
-              <code className="font-mono text-[13px]">
+            <div className="flex items-start gap-3">
+              <code className="min-w-0 break-all font-mono text-[13px]">
                 <span className="text-muted select-none">$ </span>
                 {INSTALL}
               </code>
@@ -70,8 +71,10 @@ export function Agents({ data }: { data: Data }) {
               </button>
             </div>
             <p className="pt-1 text-muted">
-              Run once in a terminal. It registers a small bridge (native messaging host) for this
-              browser; it listens only on this computer.
+              Run once in a terminal (macOS or Linux, Node.js 22+). It installs the lanehead CLI and
+              registers a small bridge (native messaging host) for Chrome; add{' '}
+              <code className="font-mono">-s -- --browser edge</code> after <code>sh</code> for
+              another browser. The bridge listens only on this computer.
             </p>
           </dd>
         </div>

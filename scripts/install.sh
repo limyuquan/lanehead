@@ -108,8 +108,9 @@ lanehead-chrome.zip from $REPO/releases/latest, unzip it and use Load unpacked."
   case ":$PATH:" in
     *":$HOME/.local/bin:"*) mkdir -p "$HOME/.local/bin" ;;
   esac
-  say "Registering the browser bridge (this waits up to 35 s for a browser to connect)"
-  result="$(LANEHEAD_HOME="$lh_home" node "$tmp/lanehead.js" install "$@")" ||
+  # --no-wait: the extension is usually not loaded yet; the step for that is printed below.
+  say "Registering the browser bridge"
+  result="$(LANEHEAD_HOME="$lh_home" node "$tmp/lanehead.js" install --no-wait "$@")" ||
     fail "\`lanehead install\` failed: $result"
   cli="$lh_home/host/lanehead.js"
 
