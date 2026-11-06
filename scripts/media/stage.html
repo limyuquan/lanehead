@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lanehead media stage</title>
+<!--
+  The stage the media captures are composed on: a drawn browser frame (headless Chromium has no
+  browser UI) and a drawn terminal. Everything inside them is a real capture: page and popup
+  screenshots, the extension's real badge, the CLI's real output. scripts/media/film.ts drives it
+  with window.stage.set(state) and screenshots one frame at a time.
+-->
+<style>
+  :root {
+    --stage: #0e0d0b;
+    --frame: #171614;
+    --bar: #1f1d1a;
+    --edge: rgba(255, 255, 255, 0.075);
+    --ink: #ecebe8;
+    --muted: #8f8a83;
+    --faint: #57534e;
+    --amber: #e9b872;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1200px; height: 750px; overflow: hidden; background: var(--stage); }
+  body { font: 13px/1.4 ui-sans-serif, -apple-system, system-ui, sans-serif; color: var(--ink);
+    -webkit-font-smoothing: antialiased; }
+  .abs { position: absolute; }
+
+  .win { position: absolute; background: var(--frame); border: 1px solid var(--edge);
+    border-radius: 12px; overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3); }
+  .strip { position: absolute; left: 0; right: 0; top: 0; height: 42px; }
+  .dots { position: absolute; left: 16px; top: 16px; display: flex; gap: 8px; }
+  .dots i { width: 11px; height: 11px; border-radius: 50%; background: #34312d; }
+  .tab { position: absolute; top: 7px; height: 35px; border-radius: 9px 9px 0 0; display: flex;
+    align-items: center; gap: 8px; padding: 0 12px; color: var(--muted); font-size: 12.5px; }
+  .tab.on { background: var(--bar); color: var(--ink); }
+  .tab .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tab .fav { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid currentColor;
+    opacity: 0.55; flex: none; }
+  .tab .x { opacity: 0.5; font-size: 13px; flex: none; }
+  .tab:not(.on):not(.last)::after { content: ""; position: absolute; right: 0; top: 9px;
+    bottom: 9px; width: 1px; background: #2c2a27; }
+  .toolbar { position: absolute; left: 0; right: 0; top: 42px; height: 46px; background: var(--bar);
+    border-bottom: 1px solid var(--edge); }
+  .nav { position: absolute; left: 14px; top: 13px; display: flex; gap: 14px; }
+  .nav svg { width: 20px; height: 20px; stroke: var(--muted); fill: none; stroke-width: 1.6;
+    stroke-linecap: round; stroke-linejoin: round; }
+  .omni { position: absolute; left: 112px; top: 7px; height: 32px; border-radius: 16px;
+    background: #141311; display: flex; align-items: center; gap: 10px; padding: 0 14px;
+    font-size: 13.5px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+  .omni svg { width: 14px; height: 14px; stroke: var(--muted); fill: none; stroke-width: 1.6; flex: none; }
+  .omni b { color: var(--ink); font-weight: 400; }
+  .ext { position: absolute; top: 9px; width: 28px; height: 28px; border-radius: 6px; }
+  .ext img { position: absolute; left: 4px; top: 3px; width: 20px; height: 20px; }
+  .badge { position: absolute; right: -6px; bottom: -2px; height: 12px; padding: 0 3px; border-radius: 3px;
+    font: 700 8.5px/12px ui-sans-serif, -apple-system, system-ui, sans-serif; color: #fff;
+    letter-spacing: 0.01em; box-shadow: 0 0 0 1.5px var(--bar); }
+  .ext.open { background: rgba(255, 255, 255, 0.09); }
+  .menu { position: absolute; top: 15px; width: 4px; }
+  .menu i { display: block; width: 3px; height: 3px; border-radius: 50%; background: var(--muted);
+    margin-bottom: 3px; }
+  .load { position: absolute; left: 0; bottom: -1px; height: 2px; background: #cfc8bd; }
+  .content { position: absolute; left: 0; top: 88px; right: 0; bottom: 0; overflow: hidden;
+    background: #121110; }
+  .content img { display: block; }
+
+  .popup { position: absolute; border-radius: 10px; overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55), 0 3px 10px rgba(0, 0, 0, 0.35); }
+  .popup img { display: block; }
+
+  .term { position: absolute; background: #0b0a09; border: 1px solid var(--edge); border-radius: 12px;
+    overflow: hidden; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45); }
+  .term .head { height: 42px; display: flex; align-items: center; padding-left: 16px; gap: 8px;
+    border-bottom: 1px solid var(--edge); }
+  .term .head i { width: 11px; height: 11px; border-radius: 50%; background: #34312d; }
+  .term .head span { margin-left: 12px; color: var(--muted); font-size: 12.5px; }
+  .term pre { margin: 0; padding: 20px 22px; font: 14px/1.6 var(--mono); white-space: pre-wrap;
+    word-break: break-all; color: var(--ink); }
+  .term .p { color: var(--amber); }
+  .term .c { color: var(--faint); }
+  .term .out { color: #c9c4bc; display: block; margin: 2px 0 14px; }
+  .term .k { color: #9a9ec9; }
+  .term .s { color: #d7d2c8; }
+  .term .num { color: var(--amber); }
+  .term .caret { display: inline-block; width: 8px; height: 16px; background: var(--ink);
+    vertical-align: -3px; }
+
+  .key { position: absolute; display: flex; align-items: center; gap: 10px; padding: 8px 12px 8px 10px;
+    border-radius: 10px; background: rgba(23, 22, 20, 0.92); border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--muted); font-size: 13px; transform: translateX(-50%);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); }
+  .key kbd { min-width: 30px; height: 30px; padding: 0 8px; border-radius: 7px; display: inline-flex;
+    align-items: center; justify-content: center; font: 600 15px var(--mono); color: var(--ink);
+    background: #2a2825; border: 1px solid #3b3834; border-bottom-width: 3px; }
+
+  .cursor { position: absolute; width: 22px; height: 30px; margin: -2px 0 0 -3px; z-index: 10;
+    transform-origin: 3px 2px; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5)); }
+  .ring { position: absolute; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.85);
+    transform: translate(-50%, -50%); z-index: 9; }
+  .fade { position: absolute; inset: 0; z-index: 20; }
+  .fade img { width: 1200px; height: 750px; display: block; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  const images = {};
+  const NAV = '<svg viewBox="0 0 20 20"><path d="M12 4 6 10l6 6"/></svg>' +
+    '<svg viewBox="0 0 20 20" style="opacity:.45"><path d="m8 4 6 6-6 6"/></svg>' +
+    '<svg viewBox="0 0 20 20"><path d="M15.5 10a5.5 5.5 0 1 1-1.6-3.9"/><path d="M15.5 3.5v3.2h-3.2"/></svg>';
+  const LOCK = '<svg viewBox="0 0 14 14"><rect x="2.5" y="6" width="9" height="6.5" rx="1.5"/><path d="M4.5 6V4.5a2.5 2.5 0 0 1 5 0V6"/></svg>';
+  const CURSOR = '<svg class="cursor" viewBox="0 0 22 30"><path d="M3 2v21l5.2-5 3.6 8.4 3.4-1.5-3.5-8.2H19z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  /** One line of the CLI's JSON, colored. */
+  function json(line) {
+    return esc(line).replace(
+      /"((?:[^"\\]|\\.)*)"(\s*:)?|(-?\d+(?:\.\d+)?)|\b(true|false|null)\b/g,
+      (_m, str, colon, num, lit) => {
+        if (num !== undefined) return `<span class="num">${num}</span>`;
+        if (lit !== undefined) return `<span class="num">${lit}</span>`;
+        return colon ? `<span class="k">"${str}"</span>${colon}` : `<span class="s">"${str}"</span>`;
+      },
+    );
+  }
+
+  function windowHtml(s, g) {
+    const w = g.win;
+    const tabs = s.tabs.map((t, i) => {
+      const x = 92 + i * (g.tabW + 2);
+      return `<div class="tab ${t.active ? 'on' : ''} ${i === s.tabs.length - 1 ? 'last' : ''}" style="left:${x}px;width:${g.tabW}px"><span class="fav"></span><span class="t">${esc(t.title)}</span><span class="x">×</span></div>`;
+    }).join('');
+    const u = s.url ? new URL(s.url) : null;
+    const omniW = w.w - 112 - 74;
+    const badge = s.badge
+      ? `<span class="badge" style="background:${s.badge.color}">${esc(s.badge.text)}</span>` : '';
+    const page = s.page && images[s.page]
+      ? `<img src="${images[s.page]}" style="width:${g.content.w}px;height:${g.content.h}px">` : '';
+    return `<div class="win" style="left:${w.x}px;top:${w.y}px;width:${w.w}px;height:${w.h}px">
+      <div class="strip"><div class="dots"><i></i><i></i><i></i></div>${tabs}</div>
+      <div class="toolbar"><div class="nav">${NAV}</div>
+        <div class="omni" style="width:${omniW}px">${LOCK}${u ? `<span><b>${esc(u.host)}</b>${esc(u.pathname + u.search)}</span>` : ''}</div>
+        <div class="ext ${s.popup ? 'open' : ''}" style="left:${g.extLeft}px"><img src="${images.icon || ''}">${badge}</div>
+        <div class="menu" style="left:${w.w - 22}px"><i></i><i></i><i></i></div>
+        ${s.loading > 0 ? `<div class="load" style="width:${(s.loading * 100).toFixed(1)}%"></div>` : ''}
+      </div>
+      <div class="content">${page}</div>
+    </div>`;
+  }
+
+  function popupHtml(s, g) {
+    if (!s.popup || !images[s.popup.img]) return '';
+    const p = s.popup;
+    return `<div class="popup" style="left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${p.h}px"><img src="${images[p.img]}" style="width:${p.w}px;height:${p.h}px"></div>`;
+  }
+
+  function termHtml(s, g) {
+    if (!g.term) return '';
+    const t = g.term;
+    const body = (s.terminal || []).map((e) => {
+      if (e.comment) return `<span class="c">${esc(e.comment)}</span>\n`;
+      const caret = e.typing ? '<span class="caret"></span>' : '';
+      const out = e.out !== undefined ? `<span class="out">${json(e.out)}</span>` : (e.typing ? '' : '\n');
+      return `<span class="p">$</span> ${esc(e.cmd)}${caret}${e.typing ? '' : '\n'}${out}`;
+    }).join('');
+    const idle = s.prompt ? `<span class="p">$</span> <span class="caret"></span>` : '';
+    return `<div class="term" style="left:${t.x}px;top:${t.y}px;width:${t.w}px;height:${t.h}px">
+      <div class="head"><i></i><i></i><i></i><span>${esc(s.termTitle || 'Terminal')}</span></div>
+      <pre>${body}${idle}</pre></div>`;
+  }
+
+  function overlayHtml(s) {
+    let h = '';
+    if (s.key) h += `<div class="key" style="left:${s.key.x}px;top:${s.key.y}px;opacity:${s.key.o ?? 1};transform:translateX(${s.key.right ? '-100%' : '-50%'})"><kbd>${esc(s.key.label)}</kbd>${s.key.caption ? `<span>${esc(s.key.caption)}</span>` : ''}</div>`;
+    if (s.ring) h += `<div class="ring" style="left:${s.ring.x}px;top:${s.ring.y}px;width:${s.ring.r * 2}px;height:${s.ring.r * 2}px;opacity:${s.ring.o}"></div>`;
+    if (s.cursor) h += CURSOR.replace('class="cursor"', `class="cursor" style="left:${s.cursor.x}px;top:${s.cursor.y}px;transform:scale(${s.cursor.down ? 0.86 : 1})"`);
+    if (s.fade && images.first) h += `<div class="fade" style="opacity:${s.fade}"><img src="${images.first}"></div>`;
+    return h;
+  }
+
+  window.stage = {
+    /** Registers a PNG (base64) under `key`, as a short blob URL that stays decoded. */
+    async image(key, base64) {
+      const blob = await (await fetch(`data:image/png;base64,${base64}`)).blob();
+      if (images[key]) URL.revokeObjectURL(images[key]);
+      images[key] = URL.createObjectURL(blob);
+    },
+    set(s, g) {
+      document.getElementById('root').innerHTML = termHtml(s, g) + windowHtml(s, g) + popupHtml(s, g) + overlayHtml(s);
+      return Promise.all([...document.images].map((i) => i.decode().catch(() => {})));
+    },
+  };
+</script>
+</body>
+</html>
