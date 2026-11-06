@@ -17,18 +17,23 @@ const manifest = (file: string, host: string, name = HOST_NAME) =>
   write(file, JSON.stringify({ name, path: host }));
 
 const realHome = process.env.HOME;
+const realXdg = process.env.XDG_CONFIG_HOME;
 beforeEach(() => {
   dir = mkdtempSync(path.join(os.tmpdir(), 'lh-uninstall-'));
   home = path.join(dir, 'home');
   process.env.LANEHEAD_HOME = home;
-  // The browsers' per-user dirs live under HOME: never the real one.
+  // The browsers' per-user dirs live under HOME: never the real one. CI runners set
+  // XDG_CONFIG_HOME, which would point Linux browser dirs back at the real config.
   process.env.HOME = path.join(dir, 'user');
+  delete process.env.XDG_CONFIG_HOME;
   write(path.join(home, 'host', 'lanehead.js'), '// host');
   write(path.join(home, 'host', 'lanehead-host'), '#!/bin/sh');
 });
 afterEach(() => {
   delete process.env.LANEHEAD_HOME;
   process.env.HOME = realHome;
+  if (realXdg === undefined) delete process.env.XDG_CONFIG_HOME;
+  else process.env.XDG_CONFIG_HOME = realXdg;
   rmSync(dir, { recursive: true, force: true });
 });
 
