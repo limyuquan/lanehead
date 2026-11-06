@@ -1,7 +1,7 @@
 # Lanehead
 
-Per-tab request headers for Chrome. Put each tab on its own lane (`x-env: feature_checkout` here,
-`x-env: feature_search` in the next tab) and let your coding agent switch them.
+Test two backends side by side in Chrome. Point one tab at your feature branch and the next at
+staging, at the same time, and let your coding agent switch them for you.
 
 <img src="docs/media/hero.gif" width="900" alt="Two tabs of the same site side by side: the left tab is on lane feature_checkout and the right on feature_search; each page shows the x-env header it received, and Lanehead's popup shows each tab's lane">
 
