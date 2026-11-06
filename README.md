@@ -112,8 +112,9 @@ Every command prints one line of JSON. Setup and the rest are in [For LLMs](#for
 ## For LLMs
 
 This section is for coding agents (Claude Code, Codex, Cursor and others). Lanehead has two
-halves: a Chrome extension the person loads once, and a `lanehead` CLI you use. Sections 1–5 are
-for setting it up and using it for someone; section 6 is for working on this repo.
+halves: a Chrome extension the person loads once, and a `lanehead` CLI you use. The sections below
+cover setting it up and using it for someone. To work on the repo itself, see
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### 1. Is it set up?
 
@@ -229,60 +230,6 @@ Full reference, security model and control page: [docs/AGENTS.md](docs/AGENTS.md
 - **Remove:** `lanehead uninstall` removes what `install` wrote (only files that are still its
   own). The person removes the extension in `chrome://extensions`; then `rm -rf
   ~/.lanehead/extension`.
-
-### 6. Working on this repo
-
-**Ground rules**
-
-- **Never open a visible browser window.** The person is working on the same machine. Every test
-  and script runs headless.
-- **No network.** The extension never makes requests; keep it that way.
-- **Keep the permissions minimal:** `declarativeNetRequest`, `storage`, `tabs`, `webNavigation`,
-  `alarms`, `nativeMessaging` and `<all_urls>`. Don't add more without asking.
-- **Generic names only** in code, tests, docs and media: `x-env`, `x-canary`, `lane_a`,
-  `feature_checkout`, `staging`, `example.com`. Never real company names or internal hosts.
-- **Pinned versions are deliberate.** WXT is 0.x and pinned exactly; don't bump dependencies
-  unless asked.
-- **Keep the docs in step.** [docs/CONTRACTS.md](docs/CONTRACTS.md) is the interface spec (ops,
-  native bridge, CLI output, control page); [docs/PLAN.md](docs/PLAN.md) has the product
-  decisions. A change to an op, CLI output or error updates CONTRACTS, and `skill/SKILL.md` when
-  agents need to know (keep it ≤ 42 lines).
-- **After any UI change, run `pnpm media`** and commit the refreshed `docs/media/` (README and
-  website use it). Look at every image before committing.
-
-**Build and test** (Node 22+, `corepack enable`)
-
-```sh
-pnpm install
-pnpm build          # extension → .output/chrome-mv3 (fixed ID via the manifest key)
-pnpm zip            # → .output/lanehead-<version>-chrome.zip (keeps the key)
-pnpm build:cli      # → dist/lanehead.js
-pnpm check          # typecheck, Biome, unit tests
-pnpm test:e2e       # e2e build + CLI, Playwright in headless Chromium
-pnpm media          # README/site media → docs/media/
-pnpm site:dev       # the website (site/)
-```
-
-A change is done when `pnpm check` and `pnpm test:e2e` are green. `pnpm zip:store` builds a zip
-without the `key` for a store upload; never ship it as a release, since the native host only
-accepts the fixed ID. `node scripts/verify-zip.mjs <zip>` checks a zip.
-
-| Path | What lives there |
-|---|---|
-| `src/core/` | Pure logic: types, header parsing, state → DNR rules, badge |
-| `src/background/` | Service worker: store, rules, tabs, badge, the op dispatcher (`api.ts`), native bridge |
-| `src/entrypoints/popup/`, `manage/` | The popup and the manage page (React) |
-| `cli/` | The `lanehead` CLI, the native host (`host.ts`), the control page (`ui.ts`), `install.ts` |
-| `skill/SKILL.md` | What agents read |
-| `scripts/install.sh` | The release installer; `scripts/media/` makes `docs/media/` |
-| `site/` | The website, deployed to GitHub Pages |
-
-**Releases.** Ask the owner before tagging: releases are public. Bump `version` in
-`package.json`, commit, then `git tag v<version> && git push origin v<version>`.
-`.github/workflows/release.yml` runs `pnpm check`, builds the zip and CLI, checks the zip keeps
-the fixed ID, and attaches `lanehead-chrome.zip`, `lanehead-<version>-chrome.zip`, `lanehead.js`,
-`install.sh` and `SHA256SUMS`. Every CI run on `main` also uploads the same files as a workflow
-artifact, for trying a build without a release.
 
 ## Credits
 
