@@ -15,7 +15,7 @@ export function hostOf(url: string): string {
 
 /** Inline style that sets `--lane`, read by `.lane-text` and `.dot`. */
 export function laneStyle(color: string | undefined): CSSProperties {
-  return { '--lane': color ?? 'var(--color-faint)' } as CSSProperties;
+  return { '--lane': color ?? 'var(--color-muted)' } as CSSProperties;
 }
 
 /** Focuses the manage page at `section` (opening it if needed). */

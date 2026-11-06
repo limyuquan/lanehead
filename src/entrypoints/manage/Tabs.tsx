@@ -117,7 +117,7 @@ export function Tabs({ data }: { data: Data }) {
                           </div>
                         ))
                       ) : (
-                        <span className="text-faint">none</span>
+                        <span className="text-muted">none</span>
                       )}
                     </td>
                     <td className="w-[150px] py-2 text-right whitespace-nowrap">

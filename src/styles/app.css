@@ -6,6 +6,8 @@
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
   --color-bg: #fcfcfb;
   --color-ink: #1d1d1f;
+  /* Every small text that means something is muted (≥4.5:1 on bg and hover in both themes);
+     faint is only for placeholders. */
   --color-muted: #6c6c70;
   --color-faint: #a3a3a7;
   --color-line: #e7e7e4;
@@ -128,10 +130,27 @@ body {
   text-decoration-color: currentColor;
 }
 
+/* A key hint: the key that does the same as the control it sits in. */
 kbd {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--color-faint);
+  line-height: 1;
+  color: var(--color-muted);
+}
+/* On a primary button: the button's text color, toned toward its background. */
+kbd.on-primary {
+  color: color-mix(in oklab, var(--color-bg) 72%, var(--color-ink));
+}
+
+/* "this tab" next to a header the tab adds itself: opens it for editing. */
+.mark {
+  color: var(--color-muted);
+  border-radius: 3px;
+}
+.mark:hover {
+  color: var(--color-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 input[type="checkbox"] {
@@ -231,7 +250,7 @@ input[type="checkbox"] {
   width: 24px;
   height: 24px;
   border-radius: 4px;
-  color: var(--color-faint);
+  color: var(--color-muted);
 }
 .kv-remove:hover {
   color: var(--color-ink);

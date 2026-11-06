@@ -6,20 +6,30 @@
  * Pasting `name: value` lines (one or many, curl `-H` too) into a Name field splits them into
  * rows. Validation is core's (`validateHeader`, `validateHeaders`); `checkRows` maps its errors to
  * the rows, which show them inline.
+ *
+ * A row missing its name or value is a draft: leaving it is not "done" (no save, no error). Enter
+ * is (live editors): it saves the row, and on the last row then opens a new one.
  */
 import {
   type ClipboardEvent,
+  type Dispatch,
   type FocusEvent,
   type KeyboardEvent,
+  type ReactNode,
+  type SetStateAction,
   useEffect,
   useId,
+  useRef,
   useState,
 } from 'react';
 import { splitHeaderLines, validateHeader, validateHeaders } from '@/core/headers';
 import type { Header } from '@/core/types';
 
-/** One row as typed. `saved`: the header this row stands for in storage (live editors). */
-export type Row = { id: string; name: string; value: string; saved?: Header };
+/**
+ * One row as typed. `saved`: the header this row stands for in storage (live editors). `spare`:
+ * the empty row shown when there are no others (not one the user added).
+ */
+export type Row = { id: string; name: string; value: string; saved?: Header; spare?: true };
 
 let seq = 0;
 export const newRow = (h: Partial<Header> = {}, saved?: Header): Row => ({
@@ -30,6 +40,12 @@ export const newRow = (h: Partial<Header> = {}, saved?: Header): Row => ({
 });
 
 export const isBlank = (r: Row) => !r.name.trim() && !r.value.trim();
+
+/** The empty row an editor shows when it has no others. */
+export const spareRow = (): Row => ({ ...newRow(), spare: true });
+
+/** Both name and value typed: leaving the row means it is done. */
+export const isFilled = (r: Row) => !!r.name.trim() && !!r.value.trim();
 
 /** A row differs from what it stands for (a row never saved always does). */
 export const isEdited = (r: Row) =>
@@ -55,19 +71,31 @@ export function checkRows(rows: Row[], others: Header[] = []) {
   return { headers, errors };
 }
 
+/** How a row was finished: Enter in it (live editors), or focus left it. */
+export type Done = 'enter' | 'blur';
+
 type Props = {
   rows: Row[];
-  onRows: (rows: Row[]) => void;
+  /** A state setter: rows change through updates, so a late change never undoes a newer one. */
+  onRows: Dispatch<SetStateAction<Row[]>>;
   /** Error text by row id, shown under that row. */
   errors?: Record<string, string>;
-  /** Focus left a row, or Enter was pressed in it (when `live`). */
-  onRowDone?: (row: Row) => void;
+  /**
+   * Focus left a row, or Enter was pressed in it (when `live`). Resolving true after Enter on the
+   * last row opens a new row.
+   */
+  onRowDone?: (row: Row, how: Done) => unknown;
   /** Rows a paste changed or added, after `onRows`. */
   onPasted?: (rows: Row[]) => void;
   /** Remove a row; default: drop it from `rows` (keeping one blank row). */
   onRemove?: (row: Row) => void;
-  /** Rows save themselves: Enter saves the row, Escape restores its saved header. */
+  /**
+   * Rows save themselves: Enter saves the row (on the last row it then opens a new one), Escape
+   * restores its saved header; Enter or Escape on an empty new row removes it.
+   */
   live?: boolean;
+  /** Shown under the rows, next to "Add header" (a save status). */
+  status?: ReactNode;
   /** Accessible name of the whole editor. */
   label: string;
   placeholder?: Header;
@@ -81,6 +109,7 @@ export function HeaderRows({
   onPasted,
   onRemove,
   live = false,
+  status,
   label,
   placeholder = { name: 'x-env', value: 'lane_a' },
 }: Props) {
@@ -92,19 +121,22 @@ export function HeaderRows({
     if (focusNext) document.getElementById(focusNext)?.focus();
     setFocusNext(null);
   }, [focusNext]);
+  const addButton = useRef<HTMLButtonElement>(null);
 
   const update = (id: string, patch: Partial<Row>) =>
-    onRows(rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    onRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
   const remove = (row: Row) => {
     if (onRemove) return onRemove(row);
-    const rest = rows.filter((r) => r.id !== row.id);
-    onRows(rest.length ? rest : [newRow()]);
+    onRows((rs) => {
+      const rest = rs.filter((r) => r.id !== row.id);
+      return rest.length ? rest : [spareRow()];
+    });
   };
 
   const add = () => {
     const row = newRow();
-    onRows([...rows, row]);
+    onRows((rs) => [...rs, row]);
     setFocusNext(fieldId(row, 'name'));
   };
 
@@ -120,19 +152,26 @@ export function HeaderRows({
     e.preventDefault();
     const changed = { ...row, name: first.name, value: first.value || row.value };
     const added = more.map((h) => newRow(h));
-    const i = rows.findIndex((r) => r.id === row.id);
-    onRows([...rows.slice(0, i), changed, ...added, ...rows.slice(i + 1)]);
+    onRows((rs) => rs.flatMap((r) => (r.id === row.id ? [changed, ...added] : [r])));
     onPasted?.([changed, ...added]);
     const last = added.at(-1) ?? changed;
     setFocusNext(fieldId(last, last.value ? 'name' : 'value'));
   };
 
   const keys = (row: Row, e: KeyboardEvent<HTMLInputElement>) => {
-    if (!live) return;
-    if (e.key === 'Enter') {
+    if (!live || (e.key !== 'Enter' && e.key !== 'Escape')) return;
+    // An empty row nobody saved: Enter or Escape drops it (the last one stays, to type into).
+    if (!row.saved && isBlank(row)) {
       e.preventDefault();
-      onRowDone?.(row);
-    } else if (e.key === 'Escape' && row.saved && isEdited(row)) {
+      if (rows.length > 1) {
+        remove(row);
+        addButton.current?.focus();
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const last = rows.at(-1)?.id === row.id;
+      void Promise.resolve(onRowDone?.(row, 'enter')).then((ok) => ok === true && last && add());
+    } else if (row.saved && isEdited(row)) {
       e.preventDefault();
       update(row.id, { name: row.saved.name, value: row.saved.value });
     }
@@ -140,12 +179,13 @@ export function HeaderRows({
 
   // Done with a row when focus leaves it, not when it moves from its name to its value.
   const blur = (row: Row, e: FocusEvent<HTMLElement>) => {
-    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) onRowDone?.(row);
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) onRowDone?.(row, 'blur');
   };
 
   return (
     <fieldset aria-label={label} className="min-w-0">
-      <div aria-hidden="true" className="kv-grid pb-0.5 text-[11px] text-faint">
+      {/* Visual column labels: each field already has its own accessible name. */}
+      <div aria-hidden="true" className="kv-grid pb-0.5 text-[11px] text-muted">
         <span className="px-2">Header</span>
         <span className="px-2">Value</span>
       </div>
@@ -212,9 +252,12 @@ export function HeaderRows({
           </fieldset>
         );
       })}
-      <button type="button" className="kv-add" onClick={add}>
-        <span aria-hidden="true">+</span> Add header
-      </button>
+      <div className="flex items-center justify-between gap-3">
+        <button ref={addButton} type="button" className="kv-add" onClick={add}>
+          <span aria-hidden="true">+</span> Add header
+        </button>
+        {status}
+      </div>
     </fieldset>
   );
 }
@@ -229,8 +272,9 @@ const nameIsValid = (name: string) => {
 };
 
 /**
- * Rows for a form that saves all headers at once. A row shows its error once focus left it (or it
- * was pasted); `submit` shows every error and returns the headers, or null when a row is bad.
+ * Rows for a form that saves all headers at once. A row shows its error once focus left it with
+ * both fields typed (or it was pasted); `submit` shows every error and returns the headers, or
+ * null when a row is bad.
  */
 export function useDraftRows(initial: Header[]) {
   const [rows, setRows] = useState(() =>
@@ -247,7 +291,7 @@ export function useDraftRows(initial: Header[]) {
         shown === 'all'
           ? errors
           : Object.fromEntries(Object.entries(errors).filter(([id]) => shown.has(id))),
-      onRowDone: (row: Row) => show([row.id]),
+      onRowDone: (row: Row) => isFilled(row) && show([row.id]),
       onPasted: (pasted: Row[]) => show(pasted.map((r) => r.id)),
     },
     submit(): Header[] | null {

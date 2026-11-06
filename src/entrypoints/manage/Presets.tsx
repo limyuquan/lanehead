@@ -1,10 +1,11 @@
-/** Presets: create, edit, delete, reorder, import and export. */
+/** Lanes (saved presets; "lane" in everything the user reads): create, edit, delete, reorder,
+ * import and export. */
 import { type FormEvent, useRef, useState } from 'react';
 import { deriveBadge, PALETTE } from '@/core/badge';
 import { validatePreset } from '@/core/headers';
 import type { Preset } from '@/core/types';
 import { HeaderRows, useDraftRows } from '@/shared/HeaderRows';
-import { call } from '@/shared/messages';
+import { call, uiText } from '@/shared/messages';
 import { Name } from '@/shared/Name';
 import { focusOnMount, laneStyle, nextColor } from '@/shared/ui';
 import { type Data, SectionHead } from './Manage';
@@ -30,7 +31,7 @@ export function Presets({ data }: { data: Data }) {
     const json = JSON.stringify({ presets: presets.map(({ id: _, ...p }) => p) }, null, 2);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([`${json}\n`], { type: 'application/json' }));
-    a.download = 'lanehead-presets.json';
+    a.download = 'lanehead-lanes.json';
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -52,7 +53,7 @@ export function Presets({ data }: { data: Data }) {
     for (const [i, entry] of list.entries()) {
       try {
         if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
-          throw new Error('It is not a preset object.');
+          throw new Error('It is not a lane.');
         }
         const p = entry as Partial<Preset>;
         const others = checked.map((c) => ({ ...c, id: '' }));
@@ -60,7 +61,10 @@ export function Presets({ data }: { data: Data }) {
       } catch (err) {
         const name = (entry as Partial<Preset> | null)?.name;
         const which = typeof name === 'string' && name ? `"${name}"` : `Entry ${i + 1}`;
-        setNote({ text: `Nothing imported. ${which}: ${(err as Error).message}`, error: true });
+        setNote({
+          text: `Nothing imported. ${which}: ${uiText((err as Error).message)}`,
+          error: true,
+        });
         return;
       }
     }
@@ -73,13 +77,13 @@ export function Presets({ data }: { data: Data }) {
         });
         known = [...known.filter((k) => k.id !== saved.id), saved];
       } catch (err) {
-        const text = `"${p.name}": ${(err as Error).message} Presets above it in the file were imported.`;
+        const text = `"${p.name}": ${(err as Error).message} Lanes above it in the file were imported.`;
         setNote({ text, error: true });
         return;
       }
     }
     setNote({
-      text: `Imported ${checked.length === 1 ? '1 preset' : `${checked.length} presets`}.`,
+      text: `Imported ${checked.length === 1 ? '1 lane' : `${checked.length} lanes`}.`,
     });
   };
 
@@ -97,11 +101,11 @@ export function Presets({ data }: { data: Data }) {
     <section aria-labelledby="presets-heading">
       <SectionHead
         id="presets"
-        title="Presets"
+        title="Lanes"
         about="Named sets of headers. Put a tab in one from the popup, or let an agent do it."
       >
         <button type="button" className="btn btn-primary" onClick={() => setEditing('new')}>
-          New preset
+          New lane
         </button>
         <button type="button" className="btn btn-quiet" onClick={() => file.current?.click()}>
           Import…
@@ -118,7 +122,7 @@ export function Presets({ data }: { data: Data }) {
           ref={file}
           type="file"
           accept="application/json,.json"
-          aria-label="Import presets file"
+          aria-label="Import lanes file"
           className="hidden"
           onChange={(e) => {
             const f = e.currentTarget.files?.[0];
@@ -217,7 +221,7 @@ export function Presets({ data }: { data: Data }) {
       ) : (
         editing !== 'new' && (
           <p className="border-t border-line pt-4 text-muted">
-            No presets yet. Create one, or import a file exported from Lanehead.
+            No lanes yet. Create one, or import a file exported from Lanehead.
           </p>
         )
       )}
@@ -227,7 +231,7 @@ export function Presets({ data }: { data: Data }) {
 
 type EditorProps = {
   preset: Preset | undefined;
-  /** Color for a new preset. */
+  /** Color for a new lane. */
   color: string;
   isGlobal: boolean;
   onDone: () => void;
@@ -282,7 +286,7 @@ function Editor({ preset, color: initialColor, isGlobal, onDone }: EditorProps) 
   return (
     <form
       onSubmit={save}
-      aria-label={preset ? `Edit ${preset.name}` : 'New preset'}
+      aria-label={preset ? `Edit ${preset.name}` : 'New lane'}
       className="max-w-[720px] py-5"
       style={laneStyle(color)}
     >
@@ -337,9 +341,7 @@ function Editor({ preset, color: initialColor, isGlobal, onDone }: EditorProps) 
         </span>
         <div className="max-w-[520px]">
           <HeaderRows label="Headers" {...draft.editor} />
-          <p className="pt-1 text-xs text-muted">
-            Paste name: value lines into a Header field to add several at once.
-          </p>
+          <p className="pt-1 text-xs text-muted">Tip: paste name: value lines to add several.</p>
         </div>
       </div>
       <div className={row}>
@@ -374,7 +376,7 @@ function Editor({ preset, color: initialColor, isGlobal, onDone }: EditorProps) 
       )}
       <div className="flex flex-wrap items-center gap-2 pt-4 sm:pl-[154px]">
         <button type="submit" className="btn btn-primary">
-          {preset ? 'Save' : 'Create preset'}
+          {preset ? 'Save' : 'Create lane'}
         </button>
         <button type="button" className="btn btn-quiet" onClick={onDone}>
           Cancel

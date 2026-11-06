@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import type { Locator, Page } from '@playwright/test';
 import { PALETTE } from '@/core/badge';
 import { EXTENSION_ID } from '@/shared/ids';
-import { expect, type Lanehead, test } from './fixtures';
+import { type ChromeGlobal, expect, type Lanehead, test } from './fixtures';
 
 const preset = (name: string, value: string) => ({
   name,
@@ -36,7 +36,16 @@ test('popup: switch lanes by click and number keys, reload with Enter and R', as
   const page = await lh.open(lh.url('p'));
   const popup = await lh.popup(await lh.tabId(page));
   const lane = popup.getByTestId('lane');
-  await expect(lane).toHaveText('No headers');
+  // With lanes saved, a tab sending nothing is Off, like the Off row.
+  await expect(lane).toHaveText('Off');
+  await expect(popup.getByRole('button', { name: 'Off' })).toHaveAttribute('aria-current', 'true');
+  // Each lane shows its key; the current row shows a check instead.
+  await expect(popup.getByRole('button', { name: /lane_b/ }).locator('kbd')).toHaveText('2');
+  await expect(popup.getByRole('button', { name: /lane_b/ })).toHaveAttribute(
+    'aria-keyshortcuts',
+    '2',
+  );
+  await expect(popup.getByRole('button', { name: 'Off' }).locator('kbd')).toHaveCount(0);
 
   await popup.getByRole('button', { name: /lane_a/ }).click();
   await expect(lane).toHaveText('lane_a');
@@ -44,10 +53,17 @@ test('popup: switch lanes by click and number keys, reload with Enter and R', as
     'aria-current',
     'true',
   );
+  await expect(popup.getByRole('button', { name: /lane_b/ }).locator('kbd')).toHaveText('2');
+  await expect(popup.getByRole('button', { name: /lane_a/ }).locator('kbd')).toHaveCount(0);
+  // Stale: the band says so (a status), the Reload button shows its key, and main is marked.
+  await expect(popup.getByRole('status').filter({ hasText: 'other headers' })).toBeVisible();
+  await expect(popup.locator('main')).toHaveAttribute('data-stale', 'true');
+  await expect(popup.getByRole('button', { name: 'Reload tab' }).locator('kbd')).toHaveText('R');
   await popup.keyboard.press('Enter'); // focus moved to Reload
   await requests(lh, 'p', 2);
   expect(await lastEnv(lh, 'p')).toBe('a');
   await expect(popup.getByRole('button', { name: /Reload tab/ })).toBeHidden();
+  await expect(popup.locator('main')).not.toHaveAttribute('data-stale');
 
   await popup.keyboard.press('2');
   await expect(lane).toHaveText('lane_b');
@@ -58,7 +74,7 @@ test('popup: switch lanes by click and number keys, reload with Enter and R', as
   await expect(popup.getByRole('button', { name: /Reload tab/ })).toBeHidden();
 
   await popup.keyboard.press('0');
-  await expect(lane).toHaveText('No headers');
+  await expect(lane).toHaveText('Off');
   await popup.keyboard.press('r');
   await requests(lh, 'p', 4);
   expect(await lastEnv(lh, 'p')).toBeUndefined();
@@ -74,21 +90,23 @@ test('popup: own headers are key/value rows: add, invalid name, paste lines, edi
   const popup = await lh.popup(tab);
   const own = async () => (await lh.api('get', { tab })).own;
 
-  // Collapsed while the tab has none of its own.
-  const toggle = popup.getByRole('button', { name: "This tab's own headers" });
+  const toggle = popup.getByRole('button', { name: 'Extra headers for this tab' });
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await toggle.click();
-  const editor = popup.getByRole('group', { name: "This tab's own headers", exact: true });
+  const editor = popup.getByRole('group', { name: 'Extra headers for this tab', exact: true });
+  await expect(popup.getByText('Saves on Enter or when you leave the row.')).toBeVisible();
+  await expect(popup.getByText('Tip: paste name: value lines to add several.')).toBeVisible();
 
-  // Fill the empty row; Enter saves it.
+  // Fill the empty row; Enter saves it ("Saved", read out politely) and opens a new row.
   await editor.getByLabel('Header name').fill('x-debug');
   await editor.getByLabel('Value of x-debug').fill('1');
   await editor.getByLabel('Value of x-debug').press('Enter');
   await expect.poll(own).toEqual(['x-debug']);
-
-  // Add header: a new row, focused. A bad name is shown at its row and nothing is sent.
-  await editor.getByRole('button', { name: 'Add header' }).click();
+  await expect(popup.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible();
+  await expect(editor.getByLabel('Header name')).toHaveCount(2);
   await expect(editor.getByLabel('Header name').last()).toBeFocused();
+
+  // A bad name is shown at its row and nothing is sent.
   await popup.keyboard.type('bad name');
   await popup.keyboard.press('Tab');
   await popup.keyboard.type('1');
@@ -104,6 +122,7 @@ test('popup: own headers are key/value rows: add, invalid name, paste lines, edi
 
   // Pasting name: value lines into a Name field splits them into rows, saved in one go.
   await editor.getByRole('button', { name: 'Add header' }).click();
+  await expect(editor.getByLabel('Header name')).toHaveCount(2);
   await paste(editor.getByLabel('Header name').last(), "X-Trace: t1\n-H 'x-env: mine'");
   await expect(editor.getByLabel('Value of x-trace')).toHaveValue('t1');
   await expect(editor.getByLabel('Value of x-env')).toHaveValue('mine');
@@ -136,25 +155,167 @@ test('popup: own headers are key/value rows: add, invalid name, paste lines, edi
   });
 });
 
+test('popup: a row missing its value is a draft; Enter adds rows and drops empty ones', async ({
+  lh,
+}) => {
+  await lh.api('preset.save', { preset: preset('lane_a', 'a') });
+  const page = await lh.open(lh.url('dr'));
+  const tab = await lh.tabId(page);
+  await lh.api('set', { tab, preset: 'lane_a' });
+  const popup = await lh.popup(tab);
+  const own = async () => (await lh.api('get', { tab })).own;
+  await popup.getByRole('button', { name: 'Extra headers for this tab' }).click();
+  const editor = popup.getByRole('group', { name: 'Extra headers for this tab', exact: true });
+
+  // Name typed, value empty, focus moves away: kept as typed, nothing sent, no error.
+  await editor.getByLabel('Header name').fill('x-draft');
+  await editor.getByLabel('Value of x-draft').focus();
+  await popup.getByRole('button', { name: 'Extra headers for this tab' }).focus();
+  await expect(editor.getByLabel('Header name')).toHaveValue('x-draft');
+  await expect(popup.getByRole('alert')).toHaveCount(0);
+  expect(await own()).toEqual([]);
+
+  // Both typed: leaving the row saves it.
+  await editor.getByLabel('Value of x-draft').fill('1');
+  await popup.getByRole('button', { name: 'Extra headers for this tab' }).focus();
+  await expect.poll(own).toEqual(['x-draft']);
+  await expect(popup.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible();
+
+  // Enter on the last row (saved already) opens a new row; Enter on that empty row drops it.
+  await editor.getByLabel('Value of x-draft').press('Enter');
+  await expect(editor.getByLabel('Header name')).toHaveCount(2);
+  await expect(editor.getByLabel('Header name').last()).toBeFocused();
+  await popup.keyboard.press('Enter');
+  await expect(editor.getByLabel('Header name')).toHaveCount(1);
+  await expect(editor.getByRole('button', { name: 'Add header' })).toBeFocused();
+  // So does Escape.
+  await editor.getByRole('button', { name: 'Add header' }).click();
+  await expect(editor.getByLabel('Header name')).toHaveCount(2);
+  await popup.keyboard.press('Escape');
+  await expect(editor.getByLabel('Header name')).toHaveCount(1);
+
+  // Enter (not leaving) checks a draft: a name without a value says so at its row.
+  await editor.getByRole('button', { name: 'Add header' }).click();
+  await popup.keyboard.type('x-two');
+  await popup.keyboard.press('Enter');
+  await expect(editor.getByRole('alert')).toHaveText('Give header "x-two" a value.');
+  await expect(editor.getByLabel('Header name')).toHaveCount(2);
+  expect(await own()).toEqual(['x-draft']);
+});
+
+test('popup: a failed save keeps the row and its error; Enter or leaving it sends it again', async ({
+  lh,
+}) => {
+  await lh.api('preset.save', { preset: preset('lane_a', 'a') });
+  const page = await lh.open(lh.url('fail'));
+  const tab = await lh.tabId(page);
+  await lh.api('set', { tab, preset: 'lane_a' });
+  const popup = await lh.popup(tab);
+  const own = async () => (await lh.api('get', { tab })).headers;
+  // The next `set` calls fail as if the service worker said no; each attempt is counted.
+  await popup.evaluate(() => {
+    const w = window as unknown as ChromeGlobal & { failSets: number; sets: number };
+    const send = w.chrome.runtime.sendMessage.bind(w.chrome.runtime);
+    w.failSets = 2;
+    w.sets = 0;
+    // biome-ignore lint/suspicious/noExplicitAny: a stub of an overloaded function
+    (w.chrome.runtime as any).sendMessage = (msg: { op: string }) => {
+      if (msg.op !== 'set') return send(msg);
+      w.sets++;
+      if (w.failSets-- > 0) {
+        return Promise.resolve({ ok: false, error: { code: 'INTERNAL', message: 'No luck.' } });
+      }
+      return send(msg);
+    };
+  });
+  const sets = () => popup.evaluate(() => (window as unknown as { sets: number }).sets);
+  await popup.getByRole('button', { name: 'Extra headers for this tab' }).click();
+  const editor = popup.getByRole('group', { name: 'Extra headers for this tab', exact: true });
+
+  await editor.getByLabel('Header name').fill('x-retry');
+  await editor.getByLabel('Value of x-retry').fill('1');
+  await editor.getByLabel('Value of x-retry').press('Enter');
+  const row = editor.getByRole('group', { name: 'Header x-retry' });
+  await expect(row.getByRole('alert')).toHaveText('No luck.');
+  // Still the row as typed, not marked saved, and no new row opened.
+  await expect(editor.getByLabel('Header name')).toHaveCount(1);
+  await expect(editor.getByLabel('Value of x-retry')).toHaveValue('1');
+  expect(await sets()).toBe(1);
+
+  // Enter again sends it again (and fails again).
+  await editor.getByLabel('Value of x-retry').press('Enter');
+  await expect.poll(sets).toBe(2);
+  await expect(row.getByRole('alert')).toHaveText('No luck.');
+
+  // Leaving the row sends it again; this time it works.
+  await popup.getByRole('button', { name: 'Extra headers for this tab' }).focus();
+  await expect.poll(sets).toBe(3);
+  await expect.poll(own).toEqual({ 'x-env': 'a', 'x-retry': '1' });
+  await expect(popup.getByRole('alert')).toHaveCount(0);
+  await expect(popup.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible();
+  // Saved now: leaving it again sends nothing.
+  await editor.getByLabel('Value of x-retry').focus();
+  await popup.getByRole('button', { name: 'Extra headers for this tab' }).focus();
+  await popup.waitForTimeout(200);
+  expect(await sets()).toBe(3);
+});
+
+test('popup with no lanes: headers just for this tab, and Off to drop them', async ({ lh }) => {
+  const page = await lh.open(lh.url('co'));
+  const tab = await lh.tabId(page);
+  const popup = await lh.popup(tab);
+  await expect(popup.getByTestId('lane')).toHaveText('No headers');
+  await expect(popup.getByRole('button', { name: 'Off' })).toHaveCount(0);
+
+  // Instead of creating a lane: the extra headers, ready to type into.
+  await popup.getByRole('button', { name: 'Or add headers just for this tab' }).click();
+  const editor = popup.getByRole('group', { name: 'Extra headers for this tab', exact: true });
+  await expect(editor.getByLabel('Header name')).toBeFocused();
+  await popup.keyboard.type('x-env');
+  await popup.keyboard.press('Tab');
+  await popup.keyboard.type('mine');
+  await popup.keyboard.press('Enter');
+  await expect(popup.getByTestId('lane')).toHaveText('Custom headers');
+  expect((await lh.api('get', { tab })).headers).toEqual({ 'x-env': 'mine' });
+
+  // No lanes, but something to turn off: Off is there (and 0).
+  const off = popup.getByRole('button', { name: 'Off' });
+  await expect(off).toBeVisible();
+  await expect(off).toHaveAttribute('aria-current', 'false');
+  await off.click();
+  await expect.poll(async () => (await lh.api('get', { tab })).headers).toEqual({});
+  await expect(popup.getByTestId('lane')).toHaveText('No headers');
+  await expect(popup.getByRole('heading', { name: 'Create a lane' })).toBeVisible();
+
+  await lh.api('set', { tab, headers: [{ name: 'x-env', value: 'again' }] });
+  await expect(popup.getByTestId('lane')).toHaveText('Custom headers');
+  await popup.locator('body').focus();
+  await popup.keyboard.press('0');
+  await expect.poll(async () => (await lh.api('get', { tab })).headers).toEqual({});
+});
+
 test('popup: save the tab as a preset, and use it for all tabs', async ({ lh }) => {
   await lh.api('preset.save', { preset: preset('lane_a', 'a') });
   const page = await lh.open(lh.url('s'));
   const tab = await lh.tabId(page);
   await lh.api('set', { tab, preset: 'lane_a', headers: [{ name: 'x-debug', value: '1' }] });
   const popup = await lh.popup(tab);
-  // Opens by itself: the tab has headers of its own.
-  await expect(popup.getByRole('button', { name: "This tab's own headers" })).toHaveAttribute(
-    'aria-expanded',
-    'true',
-  );
+  // Closed when the popup opens, even with headers of its own: the summary shows them, marked.
+  const toggle = popup.getByRole('button', { name: 'Extra headers for this tab' });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(popup.getByRole('definition').filter({ hasText: 'this tab' })).toHaveCount(1);
+  // The mark opens them, at that header.
+  await popup.getByRole('button', { name: 'Edit x-debug, a header of this tab' }).click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(popup.getByLabel('Value of x-debug')).toBeFocused();
 
-  await popup.getByRole('button', { name: 'More' }).click();
-  await popup.getByRole('button', { name: 'Save as preset' }).click();
-  await popup.getByLabel('Preset name').fill('lane_a');
-  await popup.getByLabel('Preset name').press('Enter');
+  await popup.getByRole('button', { name: 'More actions' }).click();
+  await popup.getByRole('button', { name: 'Save as new lane' }).click();
+  await popup.getByLabel('Lane name').fill('lane_a');
+  await popup.getByLabel('Lane name').press('Enter');
   await expect(popup.getByRole('alert')).toHaveText('Pick another name: "lane_a" is taken.');
-  await popup.getByLabel('Preset name').fill('lane_a_debug');
-  await popup.getByLabel('Preset name').press('Enter');
+  await popup.getByLabel('Lane name').fill('lane_a_debug');
+  await popup.getByLabel('Lane name').press('Enter');
   await expect(popup.getByTestId('lane')).toHaveText('lane_a_debug');
 
   const { presets } = await lh.api('presets', {});
@@ -191,10 +352,10 @@ test('popup: own headers on a scoped preset say where they go; save as preset ke
   const popup = await lh.popup(tab);
   await expect(popup.getByText('Only sent to example.com')).toBeVisible();
 
-  await popup.getByRole('button', { name: 'More' }).click();
-  await popup.getByRole('button', { name: 'Save as preset' }).click();
-  await popup.getByLabel('Preset name').fill('scoped_debug');
-  await popup.getByLabel('Preset name').press('Enter');
+  await popup.getByRole('button', { name: 'More actions' }).click();
+  await popup.getByRole('button', { name: 'Save as new lane' }).click();
+  await popup.getByLabel('Lane name').fill('scoped_debug');
+  await popup.getByLabel('Lane name').press('Enter');
   await expect(popup.getByTestId('lane')).toHaveText('scoped_debug');
   const saved = (await lh.api('presets', {})).presets.find((p) => p.name === 'scoped_debug');
   expect(saved?.domains).toEqual(['example.com']);
@@ -236,6 +397,7 @@ test('popup: follows changes made elsewhere and edits only the header it changed
   const tab = await lh.tabId(page);
   await lh.api('set', { tab, preset: 'lane_a', headers: [{ name: 'x-mine', value: '1' }] });
   const popup = await lh.popup(tab);
+  await popup.getByRole('button', { name: 'Extra headers for this tab' }).click();
 
   // An agent changes the tab while the popup is open.
   await lh.api('set', { tab, preset: 'lane_b', headers: [{ name: 'x-agent', value: '1' }] });
@@ -273,7 +435,7 @@ test('long names and values never widen the popup or push manage actions away', 
   await popup.setViewportSize({ width: 380, height: 600 });
   await lh.api('global', { preset: wide });
 
-  await popup.getByRole('button', { name: 'More' }).click();
+  await popup.getByRole('button', { name: 'More actions' }).click();
   await expect(popup.getByText(/for all tabs/)).toBeVisible();
   expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   // Cut in the middle: the end (where lanes differ) stays visible; the full name is the title.
@@ -353,24 +515,24 @@ test('manage: create, edit, reorder, delete presets; export and import round tri
   const page = await context.newPage();
   await manage(page, 'presets');
 
-  await page.getByRole('button', { name: 'New preset' }).click();
-  const form = page.getByRole('form', { name: 'New preset' });
+  await page.getByRole('button', { name: 'New lane' }).click();
+  const form = page.getByRole('form', { name: 'New lane' });
   await form.getByLabel('Name', { exact: true }).fill('lane_a');
   await paste(form.getByLabel('Header name'), 'x-env: a\nx-canary: 1');
   await form.getByLabel('Only send to').fill('example.com, Api.Example.org');
   await form.getByRole('radio', { name: 'Green' }).check();
-  await form.getByRole('button', { name: 'Create preset' }).click();
+  await form.getByRole('button', { name: 'Create lane' }).click();
   await expect(form).toBeHidden();
 
-  await page.getByRole('button', { name: 'New preset' }).click();
+  await page.getByRole('button', { name: 'New lane' }).click();
   await form.getByLabel('Name', { exact: true }).fill('lane_b');
   await form.getByLabel('Header name').fill('x-env b');
   await form.getByLabel('Value of x-env b').fill('b');
-  await form.getByRole('button', { name: 'Create preset' }).click();
+  await form.getByRole('button', { name: 'Create lane' }).click();
   await expect(form.getByRole('alert')).toHaveText('Use a valid header name instead of "x-env b".');
   await form.getByLabel('Header name').fill('x-env');
   await expect(form.getByRole('alert')).toBeHidden();
-  await form.getByRole('button', { name: 'Create preset' }).click();
+  await form.getByRole('button', { name: 'Create lane' }).click();
 
   const rows = page.getByRole('row');
   await expect(rows.nth(1)).toContainText('lane_a');
@@ -416,23 +578,23 @@ test('manage: create, edit, reorder, delete presets; export and import round tri
     await page.getByRole('button', { name: `Delete ${name}` }).click();
     await expect(page.getByRole('button', { name: `Edit ${name}` })).toBeHidden();
   }
-  await expect(page.getByText('No presets yet.')).toBeVisible();
+  await expect(page.getByText('No lanes yet.')).toBeVisible();
 
-  await page.getByLabel('Import presets file').setInputFiles(file);
-  await expect(page.getByRole('status')).toHaveText('Imported 2 presets.');
+  await page.getByLabel('Import lanes file').setInputFiles(file);
+  await expect(page.getByRole('status')).toHaveText('Imported 2 lanes.');
   const strip = ({ id: _, ...p }: (typeof before)[number]) => p;
   expect((await lh.api('presets', {})).presets.map(strip)).toEqual(before.map(strip));
 
   // Importing again updates by name instead of duplicating.
-  await page.getByLabel('Import presets file').setInputFiles(file);
+  await page.getByLabel('Import lanes file').setInputFiles(file);
   await expect.poll(async () => (await lh.api('presets', {})).presets.length).toBe(2);
 });
 
 test('manage: typing in the badge of a new preset stays in the badge', async ({ context, lh }) => {
   const page = await context.newPage();
   await manage(page, 'presets');
-  await page.getByRole('button', { name: 'New preset' }).click();
-  const form = page.getByRole('form', { name: 'New preset' });
+  await page.getByRole('button', { name: 'New lane' }).click();
+  const form = page.getByRole('form', { name: 'New lane' });
   await expect(form.getByLabel('Name', { exact: true })).toBeFocused();
   await page.keyboard.type('lane_kb');
   await form.getByLabel('Badge').click();
@@ -443,7 +605,7 @@ test('manage: typing in the badge of a new preset stays in the badge', async ({ 
   await expect(form.getByLabel('Badge')).toHaveValue('TEST');
   await form.getByLabel('Header name').fill('x-env');
   await form.getByLabel('Value of x-env').fill('kb');
-  await form.getByRole('button', { name: 'Create preset' }).click();
+  await form.getByRole('button', { name: 'Create lane' }).click();
   await expect
     .poll(async () => (await lh.api('presets', {})).presets.map((p) => [p.name, p.badge]))
     .toEqual([['lane_kb', 'TEST']]);
@@ -457,7 +619,7 @@ test('manage: a malformed import file shows an error and imports nothing', async
   const page = await context.newPage();
   page.on('pageerror', (e) => errors.push(e));
   await manage(page, 'presets');
-  const input = page.getByLabel('Import presets file');
+  const input = page.getByLabel('Import lanes file');
   const note = page.getByRole('status');
   const upload = (json: unknown) =>
     input.setInputFiles({
@@ -467,10 +629,10 @@ test('manage: a malformed import file shows an error and imports nothing', async
     });
 
   await upload({ presets: [preset('lane_a', 'a')] });
-  await expect(note).toHaveText('Imported 1 preset.');
+  await expect(note).toHaveText('Imported 1 lane.');
 
   await upload({ presets: [null] });
-  await expect(note).toHaveText('Nothing imported. Entry 1: It is not a preset object.');
+  await expect(note).toHaveText('Nothing imported. Entry 1: It is not a lane.');
   await upload({ presets: [preset('lane_b', 'b'), { ...preset('lane_c', 'c'), headers: 'x' }] });
   await expect(note).toHaveText('Nothing imported. "lane_c": Pass headers as a list.');
   await upload({ presets: [{ ...preset('lane_d', 'd'), color: 7 }] });

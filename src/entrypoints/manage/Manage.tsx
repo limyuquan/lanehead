@@ -1,5 +1,6 @@
 /**
- * The manage page: Presets, Tabs, Agents, Settings, one section at a time (`#presets`, …).
+ * The manage page: Lanes (saved presets, `#presets`), Tabs, Agents, Settings, one section at a
+ * time.
  * Live: it re-reads everything when storage or tabs change, so agent changes show up at once.
  */
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
@@ -48,7 +49,7 @@ async function load(): Promise<Data> {
 }
 
 const SECTIONS = [
-  ['presets', 'Presets'],
+  ['presets', 'Lanes'],
   ['tabs', 'Tabs'],
   ['agents', 'Agents'],
   ['settings', 'Settings'],

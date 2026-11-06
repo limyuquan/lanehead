@@ -22,7 +22,7 @@ export const AGENT_STATES: Record<AgentState, { label: string; about: string; do
   off: {
     label: 'Off',
     about: 'Agent control is turned off.',
-    dot: 'var(--color-faint)',
+    dot: 'var(--color-muted)',
   },
 };
 

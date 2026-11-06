@@ -62,7 +62,7 @@ export function Agents({ data }: { data: Data }) {
           <dd>
             <div className="flex items-center gap-3">
               <code className="font-mono text-[13px]">
-                <span className="text-faint select-none">$ </span>
+                <span className="text-muted select-none">$ </span>
                 {INSTALL}
               </code>
               <button type="button" className="btn btn-quiet" onClick={copy}>
@@ -132,9 +132,9 @@ export function Agents({ data }: { data: Data }) {
       </dl>
 
       <h3 className="pt-8 pb-2 font-medium">What agents can do</h3>
-      <ul className="max-w-[640px] list-disc space-y-1 pl-5 text-muted marker:text-faint">
+      <ul className="max-w-[640px] list-disc space-y-1 pl-5 text-muted marker:text-muted">
         <li>List tabs and the headers each one sends.</li>
-        <li>Put a tab in a preset's lane, give it headers of its own, or turn it off.</li>
+        <li>Put a tab in a lane, give it extra headers of its own, or turn it off.</li>
         <li>Open a URL in a new tab that sends the lane from its very first request.</li>
         <li>Reload a tab after a change.</li>
       </ul>
