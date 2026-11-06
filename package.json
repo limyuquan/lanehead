@@ -52,6 +52,9 @@
     "test": "vitest run",
     "test:e2e": "pnpm build:e2e && pnpm build:cli && playwright test",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
+    "media": "LANEHEAD_MEDIA=1 pnpm build:e2e && pnpm build:cli && LANEHEAD_MEDIA=1 playwright test --config scripts/media/playwright.config.ts",
+    "site:dev": "vite --config site/vite.config.ts",
+    "site:build": "vite build --config site/vite.config.ts",
     "prepare": "wxt prepare",
     "prepublishOnly": "pnpm build:cli"
   },
